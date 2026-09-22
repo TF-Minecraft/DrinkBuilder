@@ -1,41 +1,22 @@
-# drinkbuilder
+# DrinkBuilder
 
-Technical documentation is maintained in [TF-Minecraft/Docs](https://github.com/TF-Minecraft/Docs/blob/main/projects/DrinkBuilder/README.md).
+> Bring custom TF-Minecraft drinks from the website into the game.
 
-Use that project index for setup, configuration, architecture, integration and testing guides. This repository contains the source and project-specific assets.
+DrinkBuilder connects the website's drink creator with the server's brewing and custom-item systems. Players design drinks through the web experience, staff review submissions, and this plugin brings approved drinks into Minecraft with their recipes and visual identity.
 
-## TLibs build dependency
+It keeps the creator supplied with the ingredients and options the server supports, then handles the in-game side of publishing a drink. The web interface lives in [ProvinceSystem](https://github.com/TF-Minecraft/ProvinceSystem).
 
-TLibs is a versioned Maven `provided` dependency. From this repository, prepare
-it once with the shared installer, then build as usual:
+## Features
 
-```sh
-python3 ../tlibs/tools/install-dependency.py --pom pom.xml
-mvn clean verify
-```
+- **A shared ingredient catalogue** — publish available ingredients and their categories, including vanilla items and custom ingredients.
+- **Approved recipe delivery** — bring accepted drink recipes into BreweryX so they can become part of the brewing experience.
+- **Custom drink appearance** — publish drink names, textures, and item definitions through ItemsAdder.
+- **Creator entitlements** — share which players can use name colours, custom textures, and custom drink messages.
+- **Consistent previews** — send bottle and liquid artwork to the website so its drink previews use the server's assets.
+- **Drink lifecycle support** — apply new drinks, reapply existing ones, and remove drinks from the connected systems.
 
-See [TLibs dependency setup](https://github.com/TF-Minecraft/TLibs/blob/5da8e77d0e0696bbff7d7064a2644072da9c6428/DEPENDENCIES.md)
-for public release installation, offline builds and rollback.
-Other declared build dependencies still need their usual preparation.
-Use JDK 25 for this TLibs binary; the server must also run Java 25.
+## Documentation
 
-Builds and server runtime require Java 25. Local builds default to [TLibs 1.1.0](https://github.com/TF-Minecraft/TLibs/releases/tag/v1.1.0); CI resolves the latest published stable TLibs release for each build, verifies its checksum, and uses its exact version throughout that job.
+[Project documentation](https://github.com/TF-Minecraft/Docs/blob/main/projects/DrinkBuilder/README.md)
 
-## Shared plugin dependencies
-
-Build and release workflows install checksum-verified plugin releases through
-[TLibs' shared installer](https://github.com/TF-Minecraft/TLibs/blob/main/DEPENDENCIES.md).
-CI selects the latest published versions; local builds use the explicit Maven
-version properties. Shared plugins use `provided` scope and remain separate
-server plugins. Each build records exact versions and checksums in
-`.build/plugin-dependencies.json` alongside its JAR.
-
-From this checkout, with the TLibs repository next to it:
-
-```sh
-python3 ../tlibs/tools/install-plugins.py --pom pom.xml
-```
-
-Prepare any remaining third-party inputs with `.github/scripts/prepare-release.sh`
-before running Maven. Any source-unavailable inputs remain private and checksum-pinned wherever declared; see the installer
-documentation for authentication and reproducible rebuilds.
+Technical documentation is maintained in [TF-Minecraft/Docs](https://github.com/TF-Minecraft/Docs).
