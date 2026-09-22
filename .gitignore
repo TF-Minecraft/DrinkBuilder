@@ -36,3 +36,6 @@ pending-reload.yml
 
 # Downloaded build dependencies
 /libs/*.jar
+
+# Resolved build dependency metadata
+.build/
