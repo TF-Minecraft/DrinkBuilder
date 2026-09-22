@@ -28,6 +28,8 @@ public final class CommandManager implements CommandExecutor, TabCompleter {
 
 	public final String cmd1 = "drinkbuilder";
 
+	// Keep the existing legacy text representation, formatting, and exact-string comparisons.
+	@SuppressWarnings("deprecation")
 	@Override
 	public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
 		if (!sender.hasPermission(Permissions.ADMIN)) {
