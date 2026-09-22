@@ -1,41 +1,53 @@
-# Maven
+# Build output
 target/
+build/
+out/
+dist/
+nbbuild/
+nbdist/
+*.class
+dependency-reduced-pom.xml
 
-# IDE
-*.iml
+# Build dependencies
+/.build/
+/*.jar
+/libs/*.jar
+
+# Python caches and environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# IDE files
 .idea/
+*.iml
 *.ipr
 *.iws
+.vscode/
 .project
 .classpath
 .settings/
 nbproject/private/
-.vscode/
+.nb-gradle/
+
+# Logs and temporary files
+*.log
+hs_err_pid*
+replay_pid*
 *.bak
 *.swp
 *.tmp
+*~
 
-# Build / NetBeans leftovers
-build/
-nbbuild/
-dist/
-nbdist/
-.nb-gradle/
-
-# OS
+# Operating system files
 .DS_Store
 Thumbs.db
+Desktop.ini
 
-# Logs / classes
-*.log
-*.class
+# Local investigation notes and test artifacts
+/.scratch/
 
-# Runtime state if ever written under the project tree
+# Repository-specific files
 cmd-state.yml
 pending-reload.yml
-
-# Downloaded build dependencies
-/libs/*.jar
-
-# Resolved build dependency metadata
-.build/
