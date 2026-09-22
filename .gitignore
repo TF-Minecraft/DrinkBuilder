@@ -33,3 +33,6 @@ Thumbs.db
 # Runtime state if ever written under the project tree
 cmd-state.yml
 pending-reload.yml
+
+# Downloaded build dependencies
+/libs/*.jar
