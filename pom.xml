@@ -99,7 +99,7 @@
                             <relocations>
                                 <relocation>
                                     <pattern>com.google.gson</pattern>
-                                    <shadedPattern>net.tfminecraft.DrinkBuilder.lib.gson</shadedPattern>
+                                    <shadedPattern>net.tfminecraft.drinkbuilder.lib.gson</shadedPattern>
                                 </relocation>
                             </relocations>
                             <filters>
