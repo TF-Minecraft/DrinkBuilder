@@ -6,7 +6,7 @@
 
     <groupId>net.tfminecraft</groupId>
     <artifactId>drinkbuilder</artifactId>
-    <version>1.0</version>
+    <version>main-SNAPSHOT</version>
 
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
