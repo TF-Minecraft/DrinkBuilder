@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 : "${GH_TOKEN:?Set DEPS_TOKEN with Contents read access to TF-Minecraft/ServerAssets}"
-ref=726208728d6b3b66d09e5efcdfab9a63b8e39228
+ref=4b80431398e4ff35d703cad915b7ee4e5924a763
 mkdir -p libs
-curl --fail --location --silent --show-error --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/TF-Minecraft/ServerAssets/contents/jars/0116d714822b/ItemsAdder_3.5.0-r2.jar?ref=$ref" > "libs/ItemsAdder_3.5.0-r2.jar"
+curl --fail --location --silent --show-error --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/TF-Minecraft/ServerAssets/contents/jars/5a01b37bd744/ItemsAdder-4.0.18.jar?ref=$ref" > "libs/ItemsAdder-4.0.18.jar"
 bash .github/scripts/install-local-dependencies.sh "$@"
