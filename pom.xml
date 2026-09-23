@@ -23,12 +23,6 @@
             <scope>provided</scope>
         </dependency>
         <dependency>
-            <groupId>net.md-5</groupId>
-            <artifactId>bungeecord-chat</artifactId>
-            <version>1.20-R0.1-tfmc-3bc6fa2477eb</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
             <groupId>me.plugins</groupId>
             <artifactId>tlibs</artifactId>
             <version>${tlibs.version}</version>
