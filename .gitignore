@@ -56,3 +56,6 @@ Desktop.ini
 # Repository-specific generated or local files
 cmd-state.yml
 pending-reload.yml
+
+# Technical documentation is maintained in TF-Minecraft/Docs
+/docs/
