@@ -2,6 +2,7 @@ package net.tfminecraft.drinkbuilder.pack;
 
 import java.io.File;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
@@ -225,29 +226,59 @@ public final class RecipesYmlMerger {
 			return null;
 		}
 		if (wood instanceof Number number) {
-			return woodIndex(number.doubleValue());
+			return woodIndex(number);
 		}
 		String text = String.valueOf(wood).trim().toLowerCase(Locale.ROOT);
 		if (text.isEmpty()) {
 			return null;
 		}
 		text = text.replace(' ', '_').replace('-', '_');
+		if (text.matches("-?\\d+")) {
+			return woodIndex(parseWoodInt(text));
+		}
+		// Gson stringifies JSON numbers as "0.0". Only exact trailing zeros are integers.
+		if (text.matches("-?\\d+\\.0+")) {
+			return woodIndex(parseWoodInt(text.substring(0, text.indexOf('.'))));
+		}
+		if (text.matches("-?\\d+\\.\\d+")) {
+			throw new IOException("wood must be an integer 0-13");
+		}
+		Integer mapped = WOOD_CODES.get(text);
+		if (mapped == null) {
+			throw new IOException("unknown wood '" + wood + "'");
+		}
+		return mapped;
+	}
+
+	private static int parseWoodInt(String text) throws IOException {
 		try {
-			return woodIndex(Double.parseDouble(text));
-		} catch (NumberFormatException ignored) {
-			Integer mapped = WOOD_CODES.get(text);
-			if (mapped == null) {
-				throw new IOException("unknown wood '" + wood + "'");
-			}
-			return mapped;
+			return Integer.parseInt(text);
+		} catch (NumberFormatException e) {
+			throw new IOException("wood must be an integer 0-13");
 		}
 	}
 
-	private static int woodIndex(double value) throws IOException {
-		if (Double.isNaN(value) || Double.isInfinite(value) || value != Math.rint(value)) {
-			throw new IOException("wood must be an integer 0-13");
+	private static int woodIndex(Number number) throws IOException {
+		int code;
+		if (number instanceof Double || number instanceof Float) {
+			double value = number.doubleValue();
+			if (Double.isNaN(value) || Double.isInfinite(value) || value != Math.rint(value)) {
+				throw new IOException("wood must be an integer 0-13");
+			}
+			code = (int) value;
+		} else if (number instanceof BigDecimal decimal) {
+			try {
+				code = decimal.intValueExact();
+			} catch (ArithmeticException e) {
+				throw new IOException("wood must be an integer 0-13");
+			}
+		} else {
+			try {
+				code = Math.toIntExact(number.longValue());
+			} catch (ArithmeticException e) {
+				throw new IOException("wood must be an integer 0-13");
+			}
 		}
-		int code = (int) value;
 		if (code < 0 || code > 13) {
 			throw new IOException("wood must be 0-13");
 		}

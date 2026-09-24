@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 
 import org.junit.jupiter.api.Test;
 
@@ -35,5 +36,10 @@ class RecipesYmlMergerTest {
 		assertThrows(IOException.class, () -> RecipesYmlMerger.woodCode("mahogany"));
 		assertThrows(IOException.class, () -> RecipesYmlMerger.woodCode(14));
 		assertThrows(IOException.class, () -> RecipesYmlMerger.woodCode(1.5d));
+		assertThrows(IOException.class, () -> RecipesYmlMerger.woodCode("13.0000000000000001"));
+		assertThrows(
+			IOException.class,
+			() -> RecipesYmlMerger.woodCode(new BigDecimal("13.0000000000000001"))
+		);
 	}
 }
