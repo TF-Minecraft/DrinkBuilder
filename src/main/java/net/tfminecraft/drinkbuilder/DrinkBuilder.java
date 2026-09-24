@@ -126,7 +126,6 @@ public class DrinkBuilder extends JavaPlugin {
 		saveIfMissing("permission-groups.yml");
 		saveAssetIfMissing("glass_bottle.png");
 		saveAssetIfMissing("potion_overlay.png");
-		saveAssetIfMissing("README.txt");
 	}
 
 	private void saveIfMissing(String name) {
