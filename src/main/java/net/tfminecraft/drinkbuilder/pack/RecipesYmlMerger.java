@@ -2,6 +2,7 @@ package net.tfminecraft.drinkbuilder.pack;
 
 import java.io.File;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
@@ -22,6 +23,27 @@ import net.tfminecraft.drinkbuilder.api.ProvinceSystemClient.PendingDrink;
  * Upsert one BreweryX recipe under recipes.yml keyed by submission id.
  */
 public final class RecipesYmlMerger {
+
+	/**
+	 * BreweryX BarrelWoodType indexes. recipes.yml stores these numbers;
+	 * names are accepted from older website submissions.
+	 */
+	private static final Map<String, Integer> WOOD_CODES = Map.ofEntries(
+		Map.entry("any", 0),
+		Map.entry("birch", 1),
+		Map.entry("oak", 2),
+		Map.entry("jungle", 3),
+		Map.entry("spruce", 4),
+		Map.entry("acacia", 5),
+		Map.entry("dark_oak", 6),
+		Map.entry("crimson", 7),
+		Map.entry("warped", 8),
+		Map.entry("mangrove", 9),
+		Map.entry("cherry", 10),
+		Map.entry("bamboo", 11),
+		Map.entry("cut_copper", 12),
+		Map.entry("pale_oak", 13)
+	);
 
 	private RecipesYmlMerger() {}
 
@@ -72,9 +94,9 @@ public final class RecipesYmlMerger {
 		if (distillTime != null) {
 			setInt(section, "distilltime", distillTime, 0);
 		}
-		Object wood = recipe.get("wood");
-		if (wood != null && !String.valueOf(wood).isBlank()) {
-			section.set("wood", String.valueOf(wood).trim().toLowerCase(Locale.ROOT));
+		Integer wood = woodCode(recipe.get("wood"));
+		if (wood != null) {
+			section.set("wood", wood);
 		}
 		setInt(section, "age", recipe.get("age"), 0);
 		setInt(section, "difficulty", recipe.get("difficulty"), 1);
@@ -193,6 +215,74 @@ public final class RecipesYmlMerger {
 			log.info("[brewery] removed recipe key=" + key);
 		}
 		return true;
+	}
+
+	/**
+	 * BreweryX wood index 0-13. JSON numbers arrive as Double, so 0 must not
+	 * be written as the string "0.0".
+	 */
+	static Integer woodCode(Object wood) throws IOException {
+		if (wood == null) {
+			return null;
+		}
+		if (wood instanceof Number number) {
+			return woodIndex(number);
+		}
+		String text = String.valueOf(wood).trim().toLowerCase(Locale.ROOT);
+		if (text.isEmpty()) {
+			return null;
+		}
+		text = text.replace(' ', '_').replace('-', '_');
+		if (text.matches("-?\\d+")) {
+			return woodIndex(parseWoodInt(text));
+		}
+		// Gson stringifies JSON numbers as "0.0". Only exact trailing zeros are integers.
+		if (text.matches("-?\\d+\\.0+")) {
+			return woodIndex(parseWoodInt(text.substring(0, text.indexOf('.'))));
+		}
+		if (text.matches("-?\\d+\\.\\d+")) {
+			throw new IOException("wood must be an integer 0-13");
+		}
+		Integer mapped = WOOD_CODES.get(text);
+		if (mapped == null) {
+			throw new IOException("unknown wood '" + wood + "'");
+		}
+		return mapped;
+	}
+
+	private static int parseWoodInt(String text) throws IOException {
+		try {
+			return Integer.parseInt(text);
+		} catch (NumberFormatException e) {
+			throw new IOException("wood must be an integer 0-13");
+		}
+	}
+
+	private static int woodIndex(Number number) throws IOException {
+		int code;
+		if (number instanceof Double || number instanceof Float) {
+			double value = number.doubleValue();
+			if (Double.isNaN(value) || Double.isInfinite(value) || value != Math.rint(value)) {
+				throw new IOException("wood must be an integer 0-13");
+			}
+			code = (int) value;
+		} else if (number instanceof BigDecimal decimal) {
+			try {
+				code = decimal.intValueExact();
+			} catch (ArithmeticException e) {
+				throw new IOException("wood must be an integer 0-13");
+			}
+		} else {
+			try {
+				code = Math.toIntExact(number.longValue());
+			} catch (ArithmeticException e) {
+				throw new IOException("wood must be an integer 0-13");
+			}
+		}
+		if (code < 0 || code > 13) {
+			throw new IOException("wood must be 0-13");
+		}
+		return code;
 	}
 
 	private static List<String> mapIngredients(Object raw) throws IOException {
