@@ -81,12 +81,9 @@ public final class IaDrinksWriter {
 			? sid
 			: drink.displayName.trim();
 		ConfigurationSection item = items.createSection(sid);
-		item.set("display_name", display);
-		item.set("resource.material", "POTION");
-		item.set("resource.generate", true);
-		item.set("resource.textures", java.util.List.of("item/" + sid));
-		item.set("resource.model_id", cmd);
+		DrinkTextureItem.apply(item, display, "item/" + sid);
 		yaml.save(itemsYml);
+		DrinkTextureItem.pinPotionCmd(cmdCache(root).toPath(), iaItemId, cmd);
 
 		SimpleResult assigned = ProvinceSystemClient.assignTextureCmd(textureId, cmd, iaItemId);
 		if (!assigned.ok) {
@@ -111,6 +108,16 @@ public final class IaDrinksWriter {
 			return new File(ns);
 		}
 		return new File(parent, ns);
+	}
+
+	/** ItemsAdder custom-model-data cache next to the contents folder. */
+	static File cmdCache(File drinksRoot) {
+		File contents = drinksRoot == null ? null : drinksRoot.getParentFile();
+		File itemsAdder = contents == null ? null : contents.getParentFile();
+		if (itemsAdder == null) {
+			return new File("plugins/ItemsAdder/storage/items_ids_cache.yml");
+		}
+		return new File(itemsAdder, "storage/items_ids_cache.yml");
 	}
 
 	static File resolvePath(JavaPlugin plugin, String configured) {
