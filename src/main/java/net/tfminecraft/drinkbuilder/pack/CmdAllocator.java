@@ -3,6 +3,8 @@ package net.tfminecraft.drinkbuilder.pack;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -142,10 +144,18 @@ public final class CmdAllocator {
 			Files.createDirectories(target.toAbsolutePath().getParent());
 			temp = Files.createTempFile(target.toAbsolutePath().getParent(), "cmd-state-", ".tmp");
 			yaml.save(temp.toFile());
+			try (var channel = FileChannel.open(temp, StandardOpenOption.WRITE)) {
+				channel.force(true);
+			}
 			try {
 				Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
 			} catch (AtomicMoveNotSupportedException e) {
 				Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+			}
+			try (var directory = FileChannel.open(target.toAbsolutePath().getParent(), StandardOpenOption.READ)) {
+				directory.force(true);
+			} catch (IOException ignored) {
+				// Directory flushing is not supported on every filesystem/platform.
 			}
 			return true;
 		} catch (IOException e) {

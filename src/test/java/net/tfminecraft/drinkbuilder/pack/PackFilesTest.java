@@ -367,4 +367,30 @@ class PackFilesTest {
         assertEquals(100, allocator.peekNext());
         assertEquals(100, new CmdAllocator(plugin).allocate());
     }
+
+    @Test void allocatorFlushFailurePreservesPreviousCounterAndDoesNotReturnAnId() throws Exception {
+        var allocator = new CmdAllocator(plugin);
+        var state = plugin.getDataFolder().toPath().resolve("cmd-state.yml");
+        byte[] before = Files.readAllBytes(state);
+        var channel = mock(java.nio.channels.FileChannel.class);
+        doThrow(new IOException("flush failed")).when(channel).force(true);
+        try (var channels = mockStatic(java.nio.channels.FileChannel.class, CALLS_REAL_METHODS)) {
+            channels.when(() -> java.nio.channels.FileChannel.open(any(Path.class), eq(java.nio.file.StandardOpenOption.WRITE)))
+                .thenReturn(channel);
+            assertThrows(IllegalStateException.class, allocator::allocate);
+        }
+        verify(channel).close();
+        assertArrayEquals(before, Files.readAllBytes(state));
+        assertEquals(100, new CmdAllocator(plugin).allocate());
+    }
+
+    @Test void allocatorAllowsUnsupportedDirectoryFlushAfterPersistingTheFile() throws Exception {
+        var allocator = new CmdAllocator(plugin);
+        try (var channels = mockStatic(java.nio.channels.FileChannel.class, CALLS_REAL_METHODS)) {
+            channels.when(() -> java.nio.channels.FileChannel.open(any(Path.class), eq(java.nio.file.StandardOpenOption.READ)))
+                .thenThrow(new IOException("directory flush unavailable"));
+            assertEquals(100, allocator.allocate());
+        }
+        assertEquals(101, new CmdAllocator(plugin).peekNext());
+    }
 }

@@ -2,6 +2,8 @@ package net.tfminecraft.drinkbuilder.pack;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -216,7 +218,15 @@ public final class IaDrinksWriter {
 			yaml.set("ia-item-id", iaItemId);
 			yaml.set("texture-id", textureId);
 			yaml.save(temp.toFile());
+			try (var channel = FileChannel.open(temp, StandardOpenOption.WRITE)) {
+				channel.force(true);
+			}
 			Files.move(temp, path, StandardCopyOption.ATOMIC_MOVE);
+			try (var directory = FileChannel.open(path.getParent(), StandardOpenOption.READ)) {
+				directory.force(true);
+			} catch (IOException ignored) {
+				// Directory flushing is not supported on every filesystem/platform.
+			}
 		} finally {
 			Files.deleteIfExists(temp);
 		}

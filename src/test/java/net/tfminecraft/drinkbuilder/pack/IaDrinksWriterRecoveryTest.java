@@ -389,4 +389,37 @@ class IaDrinksWriterRecoveryTest {
         return new PendingDrink(id, "player", "ale", "Ale", "approved", true, "texture", null, null,
             remoteCmd == null ? null : new TextureInfo("texture", remoteCmd, "tfmc_drinks:ale", "ale.png"));
     }
+
+    @Test void journalFlushFailureReleasesUnpublishedReservationWithoutChangingFiles() throws Exception {
+        var allocator = new CmdAllocator(plugin);
+        byte[] before = Files.readAllBytes(cache);
+        var channel = mock(java.nio.channels.FileChannel.class);
+        doThrow(new IOException("journal flush failed")).when(channel).force(true);
+        try (var channels = mockStatic(java.nio.channels.FileChannel.class, CALLS_REAL_METHODS)) {
+            channels.when(() -> java.nio.channels.FileChannel.open(argThat((Path p) -> p.getParent().equals(journal.getParent())), eq(java.nio.file.StandardOpenOption.WRITE)))
+                .thenReturn(channel);
+            assertThrows(IOException.class, () -> write(allocator, null));
+        }
+        verify(channel).close();
+        assertFalse(Files.exists(journal));
+        assertFalse(Files.exists(png));
+        assertFalse(Files.exists(items));
+        assertArrayEquals(before, Files.readAllBytes(cache));
+        assertEquals(100, new CmdAllocator(plugin).peekNext());
+        api.verify(() -> ProvinceSystemClient.assignTextureCmd(anyString(), anyInt(), anyString()), never());
+    }
+
+    @Test void journalDirectoryFlushIsBestEffortAfterTheFileIsPersisted() throws Exception {
+        var allocator = new CmdAllocator(plugin);
+        api.when(() -> ProvinceSystemClient.assignTextureCmd("texture", 100, "tfmc_drinks:ale"))
+            .thenReturn(SimpleResult.success("ok"));
+        try (var channels = mockStatic(java.nio.channels.FileChannel.class, CALLS_REAL_METHODS)) {
+            channels.when(() -> java.nio.channels.FileChannel.open(eq(journal.getParent()), eq(java.nio.file.StandardOpenOption.READ)))
+                .thenThrow(new IOException("directory flush unavailable"));
+            assertEquals(100, write(allocator, null).cmd);
+        }
+        assertTrue(Files.exists(png));
+        assertFalse(Files.exists(journal));
+        assertEquals(101, new CmdAllocator(plugin).peekNext());
+    }
 }
