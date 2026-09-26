@@ -1,5 +1,6 @@
 package net.tfminecraft.drinkbuilder.pack;
 
+import java.util.List;
 import java.util.logging.Logger;
 
 import org.bukkit.Bukkit;
@@ -41,13 +42,17 @@ public final class DrinkDeleteRunner {
 		try {
 			RecipesYmlMerger.remove(plugin, id, log);
 		} catch (Exception e) {
-			log.warning("[drink-delete] recipe remove failed (continuing): " + e.getMessage());
+			log.warning("[drink-delete] recipe remove failed: " + e.getMessage());
+			return "Could not delete drink " + id + ": recipe cleanup failed: "
+				+ e.getMessage() + ". Website record retained.";
 		}
 
-		boolean brewOk = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "brew reload");
-		if (!brewOk) {
-			log.warning("[drink-delete] failed to dispatch brew reload");
-		}
+		// run() is called by an asynchronous command task; Bukkit commands belong on the server thread.
+		Bukkit.getScheduler().runTask(plugin, () -> {
+			if (!Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "brew reload")) {
+				log.warning("[drink-delete] failed to dispatch brew reload");
+			}
+		});
 
 		RevokeResult revoked = ProvinceSystemClient.revokeDrink(id);
 		if (!revoked.ok) {
@@ -55,26 +60,41 @@ public final class DrinkDeleteRunner {
 				+ (revoked.error != null ? revoked.error : "unknown");
 		}
 
+		DeletableDrinkCache.invalidate();
+		DeferredDrinkIaReload reload = plugin.getDeferredIaReload();
+		if (reload != null) {
+			// Remove the revoked submission from future queued acknowledgements.
+			reload.queue().clear(List.of(id));
+		}
+
 		boolean iaChanged = false;
 		if (revoked.textureFreed) {
 			try {
-				iaChanged = IaDrinksRemover.remove(plugin, revoked.iaItemId, log);
+				synchronized (IaDrinksWriter.class) {
+					if (revoked.iaItemId != null && !revoked.iaItemId.isBlank()) {
+						iaChanged = IaDrinksRemover.remove(plugin, revoked.iaItemId, log);
+					} else if (revoked.cmd != null) {
+						throw new IllegalStateException("missing ItemsAdder item id for CMD " + revoked.cmd);
+					}
+					iaChanged = IaDrinksWriter.cancelPendingWrite(plugin, id, plugin.getCmdAllocator(), log) || iaChanged;
+					if (revoked.cmd != null) {
+						plugin.getCmdAllocator().free(revoked.cmd);
+					}
+				}
 			} catch (Exception e) {
-				log.warning("[drink-delete] IA remove failed: " + e.getMessage());
-			}
-			if (revoked.cmd != null) {
-				plugin.getCmdAllocator().free(revoked.cmd);
-			}
-		}
-
-		if (iaChanged) {
-			DeferredDrinkIaReload reload = plugin.getDeferredIaReload();
-			if (reload != null) {
-				Bukkit.getScheduler().runTask(plugin, () -> reload.requestFlush(true));
+				log.warning("[drink-delete] IA remove failed; CMD retained: " + e.getMessage());
+				// Removal can fail after changing items.yml. Refresh that partial cleanup too.
+				if (reload != null) {
+					reload.requestRefresh();
+				}
+				return "Drink " + id + " revoked, but IA cleanup failed: " + e.getMessage()
+					+ ". CMD retained; manual cleanup required.";
 			}
 		}
 
-		DeletableDrinkCache.invalidate();
+		if (iaChanged && reload != null) {
+			reload.requestRefresh();
+		}
 
 		String label = drink.displayName != null && !drink.displayName.isBlank()
 			? drink.displayName

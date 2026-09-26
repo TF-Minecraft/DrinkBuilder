@@ -140,7 +140,7 @@ public final class PackPullRunner {
 	) throws Exception {
 		Integer cmd = drink.existingCmd();
 		boolean wroteIa = false;
-		if (drink.needsIaWrite()) {
+		if (drink.needsIaWrite() || IaDrinksWriter.hasPendingWrite(plugin, drink.id)) {
 			IaDrinksWriter.WriteResult wr = IaDrinksWriter.write(
 				plugin, drink, allocator, log
 			);
@@ -205,8 +205,11 @@ public final class PackPullRunner {
 				}
 
 				DeferredDrinkIaReload reload = plugin.getDeferredIaReload();
-				if (reload != null && !needIa.isEmpty()) {
-					reload.queue().enqueue(needIa);
+				if (reload != null) {
+					if (!needIa.isEmpty()) {
+						reload.queue().enqueue(needIa);
+					}
+					// Retry pending reloads/deletion refreshes even when this poll writes no new drinks.
 					reload.requestFlush(forceReload);
 				}
 

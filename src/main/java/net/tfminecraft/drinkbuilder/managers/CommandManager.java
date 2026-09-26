@@ -149,7 +149,7 @@ public final class CommandManager implements CommandExecutor, TabCompleter {
 			Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
 				String result = DrinkDeleteRunner.run(id);
 				Bukkit.getScheduler().runTask(plugin, () ->
-					sender.sendMessage(ChatColor.GREEN + result)
+					sender.sendMessage((result.startsWith("Deleted drink ") ? ChatColor.GREEN : ChatColor.RED) + result)
 				);
 			});
 			return true;

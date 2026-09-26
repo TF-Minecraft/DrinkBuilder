@@ -3,6 +3,7 @@ package net.tfminecraft.drinkbuilder.pack;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -83,4 +84,26 @@ class DrinkTextureItemTest {
 			  other:sword: 10005
 			""", text);
 	}
+
+    @Test
+    void rejectsInvalidIdsAndMissingPotionCache(@TempDir Path dir) throws Exception {
+        Path cache = dir.resolve("cache.yml");
+        for (String id : java.util.Arrays.asList(null, "", " ", "no_namespace")) {
+            assertThrows(java.io.IOException.class, () -> DrinkTextureItem.pinPotionCmd(cache, id, 1));
+        }
+        assertThrows(java.io.IOException.class, () -> DrinkTextureItem.pinPotionCmd(cache, "ns:id", 1));
+        Files.writeString(cache, "PAPER:\n  ns:id: 1\n");
+        assertThrows(java.io.IOException.class, () -> DrinkTextureItem.pinPotionCmd(cache, "ns:id", 1));
+    }
+
+    @Test
+    void preservesMatchingCacheAndAppendsAtEnd(@TempDir Path dir) throws Exception {
+        Path cache = dir.resolve("cache.yml");
+        String content = "POTION:\n\n\tns:old: 1\n";
+        Files.writeString(cache, content);
+        DrinkTextureItem.pinPotionCmd(cache, "ns:old", 1);
+        assertEquals(content, Files.readString(cache));
+        DrinkTextureItem.pinPotionCmd(cache, " ns:new ", 2);
+        assertEquals(content + "  ns:new: 2\n", Files.readString(cache));
+    }
 }
