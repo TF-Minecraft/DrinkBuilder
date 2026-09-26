@@ -23,6 +23,12 @@ public final class IaDrinksRemover {
 	 */
 	public static boolean remove(JavaPlugin plugin, String iaItemId, Logger log)
 		throws IOException {
+		synchronized (IaDrinksWriter.class) {
+			return removeLocked(plugin, iaItemId, log);
+		}
+	}
+
+	private static boolean removeLocked(JavaPlugin plugin, String iaItemId, Logger log) throws IOException {
 		String raw = iaItemId == null ? "" : iaItemId.trim();
 		if (raw.isEmpty()) {
 			return false;
@@ -37,7 +43,7 @@ public final class IaDrinksRemover {
 				if (log != null) {
 					log.warning("[ia] refusing to delete non-" + expectedNs + " item: " + raw);
 				}
-				return false;
+				throw new IOException("refusing to delete non-" + expectedNs + " item: " + raw);
 			}
 		}
 		if (stem.isEmpty() || stem.contains("..") || stem.contains("/") || stem.contains("\\")) {

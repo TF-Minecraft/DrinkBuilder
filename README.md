@@ -15,6 +15,37 @@ It keeps the creator supplied with the ingredients and options the server suppor
 - **Consistent previews** — send bottle and liquid artwork to the website so its drink previews use the server's assets.
 - **Drink lifecycle support** — apply new drinks, reapply existing ones, and remove drinks from the connected systems.
 
+## Failure recovery
+
+Failed texture publication restores the previous local files. If the website may
+have accepted the model ID, `pending-writes/` retains that reservation so the next
+pull retries with the same ID, including after a restart. Do not delete those
+records or reset `cmd-state.yml` to work around an error; doing so can reuse an ID
+that is already assigned. Damaged allocator state now stops initialization instead
+of silently restarting allocation from the beginning of the range.
+
+If deletion reports that local cleanup failed, the model ID remains reserved.
+The message and server log identify the failed cleanup; successful website
+revocation is not reported as successful local cleanup.
+
+## Tests and coverage
+
+Run `mvn clean verify` with Java 21 and the pinned plugin dependencies installed
+(the build workflow prepares them). JaCoCo writes HTML and XML reports to
+`target/site/jacoco/`; CI uploads the report as a `coverage-report` artifact.
+
+The suite currently has 141 passing tests: **99.73% line coverage, 97.71% branch
+coverage, and 100% method/class coverage**, with no production-code exclusions.
+The Maven gate permits at most 6 missed lines and 32 missed branches, and no
+missed methods or classes, so additional uncovered code fails verification.
+
+The six remaining lines are defensive fallbacks in `CatalogSyncService.escape`,
+`IngredientExistenceChecker.vanillaExists`, `ProvinceSystemClient.putBytes`,
+`DeferredDrinkIaReload.ackQueued`, and `ConfigLoader.load`. Most remaining
+branches likewise guard values already normalized by their callers; the report
+retains these gaps. Tests use temporary files and mocked server/API boundaries,
+including test-only optional-plugin fixtures; they do not boot a Minecraft server.
+
 ## Documentation
 
 [Project documentation](https://github.com/TF-Minecraft/Docs/blob/main/projects/DrinkBuilder/README.md)

@@ -2,13 +2,17 @@ package net.tfminecraft.drinkbuilder.pack;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 
-import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import net.tfminecraft.drinkbuilder.Cache;
@@ -43,7 +47,10 @@ public final class CmdAllocator {
 		if (!freed.isEmpty()) {
 			int recycled = freed.iterator().next();
 			freed.remove(recycled);
-			save();
+			if (!save()) {
+				freed.addFirst(recycled);
+				throw new IllegalStateException("Could not persist drink CMD allocation");
+			}
 			return recycled;
 		}
 		if (next > Cache.cmdMax) {
@@ -53,7 +60,10 @@ public final class CmdAllocator {
 		}
 		int allocated = next;
 		next++;
-		save();
+		if (!save()) {
+			next--;
+			throw new IllegalStateException("Could not persist drink CMD allocation");
+		}
 		return allocated;
 	}
 
@@ -86,12 +96,20 @@ public final class CmdAllocator {
 	private void load() {
 		next = Cache.cmdMin;
 		freed.clear();
-		if (!stateFile.exists()) {
+		if (Files.notExists(stateFile.toPath())) {
 			save();
 			return;
 		}
-		FileConfiguration yaml = YamlConfiguration.loadConfiguration(stateFile);
-		next = yaml.getInt("next", Cache.cmdMin);
+		YamlConfiguration yaml = new YamlConfiguration();
+		try {
+			yaml.load(stateFile);
+			if (!yaml.isInt("next")) {
+				throw new IOException("missing or invalid next CMD counter");
+			}
+		} catch (IOException | InvalidConfigurationException e) {
+			throw new IllegalStateException("Could not load drink CMD state: " + stateFile, e);
+		}
+		next = yaml.getInt("next");
 		List<?> raw = yaml.getList("freed");
 		if (raw != null) {
 			for (Object item : raw) {
@@ -110,18 +128,37 @@ public final class CmdAllocator {
 		freed.removeIf(c -> c < Cache.cmdMin || c > Cache.cmdMax || c >= next);
 	}
 
-	private void save() {
-		FileConfiguration yaml = new YamlConfiguration();
+	private boolean save() {
+		YamlConfiguration yaml = new YamlConfiguration();
 		yaml.set("next", next);
 		yaml.set("min", Cache.cmdMin);
 		yaml.set("max", Cache.cmdMax);
 		List<Integer> freedList = new ArrayList<>(freed);
 		Collections.sort(freedList);
 		yaml.set("freed", freedList);
+		Path temp = null;
 		try {
-			yaml.save(stateFile);
+			Path target = stateFile.toPath();
+			Files.createDirectories(target.toAbsolutePath().getParent());
+			temp = Files.createTempFile(target.toAbsolutePath().getParent(), "cmd-state-", ".tmp");
+			yaml.save(temp.toFile());
+			try {
+				Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+			} catch (AtomicMoveNotSupportedException e) {
+				Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+			}
+			return true;
 		} catch (IOException e) {
 			plugin.getLogger().warning("[cmd] could not save cmd-state.yml: " + e.getMessage());
+			return false;
+		} finally {
+			if (temp != null) {
+				try {
+					Files.deleteIfExists(temp);
+				} catch (IOException e) {
+					plugin.getLogger().warning("[cmd] could not remove temporary CMD state: " + e.getMessage());
+				}
+			}
 		}
 	}
 }

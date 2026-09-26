@@ -25,6 +25,7 @@ public final class DeferredDrinkIaReload implements Listener {
 	private final JavaPlugin plugin;
 	private final PendingReloadQueue queue;
 	private volatile boolean inFlight;
+	private boolean refreshPending;
 	private BukkitTask delayedZipTask;
 	private BukkitTask fallbackAckTask;
 	private final boolean itemsAdderPresent;
@@ -44,17 +45,22 @@ public final class DeferredDrinkIaReload implements Listener {
 	}
 
 	public void requestFlush(boolean force) {
-		if (inFlight) {
-			return;
-		}
 		Bukkit.getScheduler().runTask(plugin, () -> beginFlush(force));
+	}
+
+	/** Rebuild after local deletions, even when no submissions need an applied acknowledgement. */
+	public void requestRefresh() {
+		Bukkit.getScheduler().runTask(plugin, () -> {
+			refreshPending = true;
+			beginFlush(true);
+		});
 	}
 
 	private void beginFlush(boolean force) {
 		if (inFlight) {
 			return;
 		}
-		if (queue.isEmpty()) {
+		if (queue.isEmpty() && !refreshPending) {
 			return;
 		}
 		if (!force && !Bukkit.getOnlinePlayers().isEmpty()) {
@@ -63,6 +69,7 @@ public final class DeferredDrinkIaReload implements Listener {
 			return;
 		}
 
+		refreshPending = false;
 		inFlight = true;
 		Logger log = plugin.getLogger();
 		int delaySec = Math.max(0, Cache.iaReloadDelaySeconds);
@@ -71,7 +78,10 @@ public final class DeferredDrinkIaReload implements Listener {
 
 		boolean reloadOk = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "iareload");
 		if (!reloadOk) {
-			log.warning("[ia-reload] failed to dispatch iareload: continuing to iazip");
+			inFlight = false;
+			refreshPending = true;
+			log.warning("[ia-reload] failed to dispatch iareload: will retry later");
+			return;
 		}
 
 		if (delayedZipTask != null) {
@@ -89,6 +99,7 @@ public final class DeferredDrinkIaReload implements Listener {
 			boolean ok = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "iazip");
 			if (!ok) {
 				inFlight = false;
+				refreshPending = true;
 				log.severe("[ia-reload] failed to dispatch iazip: will retry later");
 				return;
 			}
@@ -108,6 +119,9 @@ public final class DeferredDrinkIaReload implements Listener {
 		}
 		inFlight = false;
 		List<String> ids = queue.snapshot();
+		if (refreshPending) {
+			beginFlush(true);
+		}
 		if (ids.isEmpty()) {
 			return;
 		}
@@ -142,9 +156,13 @@ public final class DeferredDrinkIaReload implements Listener {
 	 * Called via reflection / optional listener when ItemsAdder is on the classpath.
 	 */
 	public void onPackCompressed() {
-		if (!inFlight) {
-			return;
-		}
-		ackQueued("pack-compressed");
+		// ItemsAdder emits its completion event asynchronously. All reload state and
+		// command dispatch must run on the server thread, including a follow-up refresh.
+		Bukkit.getScheduler().runTask(plugin, () -> {
+			if (!inFlight) {
+				return;
+			}
+			ackQueued("pack-compressed");
+		});
 	}
 }
