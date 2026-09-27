@@ -105,11 +105,15 @@ public final class PackPullRunner {
 				}
 
 				CmdAllocator allocator = plugin.getCmdAllocator();
+				DeferredDrinkIaReload reload = plugin.getDeferredIaReload();
+				List<String> awaitingZip = reload == null ? List.of() : reload.queue().snapshot();
 				for (PendingDrink drink : list.submissions) {
 					try {
 						boolean wroteIa = applyDrink(plugin, drink, allocator, log);
 						written++;
-						if (wroteIa) {
+						// A texture written on an earlier poll already has its CMD, so it no longer
+						// needs an IA write, but it is not live until the queued iazip completes.
+						if (wroteIa || awaitingZip.contains(drink.id.trim())) {
 							needIa.add(drink.id.trim());
 						} else {
 							ackImmediate.add(drink.id.trim());

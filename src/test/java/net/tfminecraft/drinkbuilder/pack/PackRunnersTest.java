@@ -98,6 +98,22 @@ class PackRunnersTest {
         }
     }
 
+    @Test void textureAwaitingZipIsNotAckedWhenTheNextPollSeesItsCmd() {
+        try (Fixture f = new Fixture()) {
+            // The first poll wrote the texture and reported its CMD; the zip waits for an empty server.
+            PendingDrink written = new PendingDrink("brew", null, null, null, "approved", false, "tex", Map.of(), List.of(),
+                new TextureInfo("tex", 20003, "tfmc_drinks:brew", null));
+            f.api.when(ProvinceSystemClient::listPendingApply).thenReturn(ListResult.success(List.of(written)));
+            when(f.queue.snapshot()).thenReturn(List.of("brew"));
+            AtomicReference<PackPullRunner.PullResult> result = new AtomicReference<>();
+            PackPullRunner.run(false, result::set);
+            assertEquals(0, result.get().ackNow);
+            assertEquals(1, result.get().queuedIa);
+            f.api.verify(() -> ProvinceSystemClient.markApplied(any()), never());
+            verify(f.queue).enqueue(List.of("brew"));
+        }
+    }
+
     @Test void pullHandlesListFailureEmptyListAndThrownFailure() {
         try (Fixture f = new Fixture()) {
             f.api.when(ProvinceSystemClient::listPendingApply).thenReturn(ListResult.fail("offline"), ListResult.success(List.of()))

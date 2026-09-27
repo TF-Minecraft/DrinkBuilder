@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import java.lang.reflect.Field;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayDeque;
@@ -27,6 +28,7 @@ import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.scheduler.BukkitTask;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.MockedStatic;
 
 class ReloadSchedulingTest {
@@ -142,7 +144,7 @@ class ReloadSchedulingTest {
         }
     }
 
-    @Test void reloadWaitsForEmptyServerAndCoalescesRequestsThenFallbackAcksOnlyConfirmedIds() {
+    @Test void reloadWaitsForEmptyServerAndCoalescesRequestsThenFallbackAckDrainsQueue() {
         try (Fixture f = new Fixture()) {
             Cache.iaReloadDelaySeconds = -1;
             DeferredDrinkIaReload reload = new DeferredDrinkIaReload(f.plugin, f.pending);
@@ -168,7 +170,9 @@ class ReloadSchedulingTest {
             f.api.when(() -> ProvinceSystemClient.markApplied(List.of("one", "two")))
                 .thenReturn(AppliedResult.success(List.of("one")));
             f.later.remove().run(); f.drain();
-            verify(f.pending).clear(List.of("one"));
+            // "two" was not markable (already applied, revoked or unknown), so it must not linger.
+            verify(f.pending).clear(List.of("one", "two"));
+            verify(f.log).warning(contains("[two]"));
             f.bukkit.verify(() -> Bukkit.dispatchCommand(null, "iareload"), times(1));
             f.bukkit.verify(() -> Bukkit.dispatchCommand(null, "iazip"), times(1));
         }
@@ -342,6 +346,22 @@ class ReloadSchedulingTest {
         ((AtomicLong) time.get(null)).set(0L);
         Field running = DeletableDrinkCache.class.getDeclaredField("refreshInFlight"); running.setAccessible(true);
         running.setBoolean(null, false);
+    }
+
+    @Test void unmarkableIdsDoNotTriggerAnotherRebuildOnTheNextPoll(@TempDir Path dir) {
+        try (Fixture f = new Fixture()) {
+            PendingReloadQueue real = new PendingReloadQueue(f.plugin);
+            when(f.plugin.getDataFolder()).thenReturn(dir.toFile());
+            real.enqueue(List.of("one", "two"));
+            DeferredDrinkIaReload reload = new DeferredDrinkIaReload(f.plugin, real);
+            f.api.when(() -> ProvinceSystemClient.markApplied(List.of("one", "two")))
+                .thenReturn(AppliedResult.success(List.of()));
+            reload.requestFlush(true); f.drain();
+            f.later.remove().run(); f.later.remove().run(); f.drain();
+            assertTrue(real.isEmpty());
+            reload.requestFlush(true); f.drain();
+            f.bukkit.verify(() -> Bukkit.dispatchCommand(null, "iareload"), times(1));
+        }
     }
 
     @Test void deletionRefreshBuildsPackWithoutAcknowledgingAnySubmission() {
