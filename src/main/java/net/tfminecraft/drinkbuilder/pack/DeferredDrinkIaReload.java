@@ -1,5 +1,6 @@
 package net.tfminecraft.drinkbuilder.pack;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -134,7 +135,16 @@ public final class DeferredDrinkIaReload implements Listener {
 					log.warning("[ia-reload] applied ack failed: " + result.error);
 					return;
 				}
-				queue.clear(result.applied);
+				// The backend only marks approved/pending_pack rows that are not yet applied.
+				// Anything else it skips can never be marked, so keeping it queued would
+				// rebuild the pack on every poll. A later re-approval is re-listed by the pull.
+				List<String> skipped = new ArrayList<>(ids);
+				skipped.removeAll(result.applied);
+				queue.clear(ids);
+				if (!skipped.isEmpty()) {
+					log.warning("[ia-reload] backend did not mark " + skipped
+						+ " as applied (already applied, revoked or unknown): dropped from queue");
+				}
 				log.info("[ia-reload] applied ack ok: " + result.applied.size()
 					+ " id(s); remaining=" + queue.size());
 			});
