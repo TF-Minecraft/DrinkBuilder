@@ -25,6 +25,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.MockedStatic;
 
+import com.google.gson.Gson;
+
 import net.tfminecraft.drinkbuilder.Cache;
 import net.tfminecraft.drinkbuilder.api.ProvinceSystemClient.PendingDrink;
 
@@ -79,6 +81,44 @@ class RecipesYmlMergerTest {
 	}
 
 	@Test
+	@SuppressWarnings("unchecked")
+	void preservesWebsiteJsonQuantitiesInVanillaAndCustomBreweryTokens() throws IOException {
+		Cache.ingredients = List.of(
+			new Cache.Ingredient("apple", "vanilla", "APPLE", "Apple", null),
+			new Cache.Ingredient("grape", "itemsadder", "itemsadder:tfmc_cooking:grape", "Grape", null),
+			new Cache.Ingredient("bark", "mmoitems", "MMOItems:BARK", "Bark", null));
+		Map<String, Object> recipe = new Gson().fromJson("""
+			{"ingredients":[{"id":"apple","amount":3},
+			{"id":"grape","amount":5},{"id":"bark","amount":2}],
+			"cooking_time":12,"distill_runs":2,"wood":4,"age":5,
+			"difficulty":4,"alcohol":9}
+			""", Map.class);
+		RecipesYmlMerger.merge(null, drink("submission", "Name", recipe), 20001, null);
+		ConfigurationSection section = load().getConfigurationSection("recipes.submission");
+		assertEquals(List.of("APPLE/3", "itemsadder:tfmc_cooking:grape/5", "MMOItems:BARK/2"),
+			section.getStringList("ingredients"));
+		assertEquals(12, section.getInt("cookingtime"));
+		assertEquals(4, section.getInt("wood"));
+	}
+
+	@Test
+	void rejectsInvalidQuantitiesWithoutOverwritingExistingRecipes() throws IOException {
+		Files.createDirectories(recipeFile().getParent());
+		String original = "recipes:\n  existing:\n    name: Keep\n";
+		Files.writeString(recipeFile(), original);
+		for (Object amount : Arrays.asList(null, "bad", 0, -1, 1.5d, Double.NaN,
+			Double.POSITIVE_INFINITY, Long.MAX_VALUE, new BigDecimal("3.0000000000000001"))) {
+			Map<String, Object> row = new HashMap<>();
+			row.put("id", "apple");
+			row.put("amount", amount);
+			Map<String, Object> recipe = Map.of("ingredients", List.of(row));
+			assertTrue(assertThrows(IOException.class, () -> RecipesYmlMerger.merge(null,
+				drink("submission", "Name", recipe), 20001, null)).getMessage().contains("positive integer"));
+			assertEquals(original, Files.readString(recipeFile()));
+		}
+	}
+
+	@Test
 	void coloursHandleMissingInvalidAndSingleStops() {
 		assertEquals("", RecipesYmlMerger.bakeColourStops(null, List.of("abcdef")));
 		assertEquals("", RecipesYmlMerger.bakeColourStops("", List.of("abcdef")));
@@ -109,8 +149,7 @@ class RecipesYmlMergerTest {
 		recipe.put("name_bad_colours", List.of("ff0000"));
 		recipe.put("name_good_colours", List.of("0000ff"));
 		recipe.put("ingredients", List.of("ignored", Map.of(), Map.of("id", " "),
-			Map.of("id", " APPLE ", "amount", 3), Map.of("id", "wheat", "amount", "bad"),
-			Map.of("id", "apple", "amount", 0), Map.of("id", "apple")));
+			Map.of("id", " APPLE ", "amount", 3), Map.of("id", "wheat", "amount", "5")));
 		recipe.put("cooking_time", "12.9");
 		recipe.put("distill_runs", 2);
 		recipe.put("distill_time", "invalid");
@@ -143,7 +182,7 @@ class RecipesYmlMergerTest {
 			+ RecipesYmlMerger.bakeColourStops("Normal", List.of("00ff00")) + "/"
 			+ RecipesYmlMerger.bakeColourStops("Good", List.of("0000ff")), section.getString("name"));
 		assertTrue(section.getBoolean("enabled"));
-		assertEquals(List.of("APPLE/3", "WHEAT/1", "APPLE/1", "APPLE/1"), section.getStringList("ingredients"));
+		assertEquals(List.of("APPLE/3", "WHEAT/5"), section.getStringList("ingredients"));
 		assertEquals(12, section.getInt("cookingtime"));
 		assertEquals(2, section.getInt("distillruns"));
 		assertEquals(0, section.getInt("distilltime"));
@@ -218,7 +257,8 @@ class RecipesYmlMergerTest {
 		Files.createDirectories(recipeFile().getParent());
 		String original = "recipes:\n  existing:\n    name: Keep\n";
 		Files.writeString(recipeFile(), original);
-		for (Object raw : Arrays.asList(null, "not a list", List.of(), List.of(Map.of("id", "unknown")), List.of(Map.of("id", "broken")))) {
+		for (Object raw : Arrays.asList(null, "not a list", List.of(),
+			List.of(Map.of("id", "unknown", "amount", 1)), List.of(Map.of("id", "broken", "amount", 1)))) {
 			Map<String, Object> recipe = baseRecipe();
 			recipe.put("ingredients", raw);
 			assertThrows(IOException.class, () -> RecipesYmlMerger.merge(null, drink("submission", "Name", recipe), 1, null));

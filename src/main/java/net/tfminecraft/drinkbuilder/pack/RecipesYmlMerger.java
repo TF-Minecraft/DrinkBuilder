@@ -82,11 +82,7 @@ public final class RecipesYmlMerger {
 		section.set("name", names);
 		section.set("enabled", true);
 
-		List<String> ingredients = mapIngredients(recipe.get("ingredients"));
-		if (ingredients.isEmpty()) {
-			throw new IOException("recipe has no mappable ingredients for " + key);
-		}
-		section.set("ingredients", ingredients);
+		section.set("ingredients", validateIngredients(recipe, key));
 
 		setInt(section, "cookingtime", recipe.get("cooking_time"), 0);
 		setInt(section, "distillruns", recipe.get("distill_runs"), 0);
@@ -285,6 +281,14 @@ public final class RecipesYmlMerger {
 		return code;
 	}
 
+	static List<String> validateIngredients(Map<String, Object> recipe, String key) throws IOException {
+		List<String> ingredients = mapIngredients(recipe.get("ingredients"));
+		if (ingredients.isEmpty()) {
+			throw new IOException("recipe has no mappable ingredients for " + key);
+		}
+		return ingredients;
+	}
+
 	private static List<String> mapIngredients(Object raw) throws IOException {
 		List<String> out = new ArrayList<>();
 		if (!(raw instanceof List<?> list)) {
@@ -300,14 +304,15 @@ public final class RecipesYmlMerger {
 			if (id.isEmpty()) {
 				continue;
 			}
-			int amount = 1;
+			int amount;
 			try {
-				amount = Integer.parseInt(String.valueOf(amountObj));
-			} catch (Exception ignored) {
-				amount = 1;
+				// JSON recipe numbers can use decimal notation (e.g. 3.0).
+				amount = new BigDecimal(String.valueOf(amountObj)).intValueExact();
+			} catch (NumberFormatException | ArithmeticException e) {
+				throw new IOException("ingredient amount must be a positive integer for id=" + id, e);
 			}
 			if (amount < 1) {
-				amount = 1;
+				throw new IOException("ingredient amount must be a positive integer for id=" + id);
 			}
 			String token = null;
 			for (Cache.Ingredient ing : Cache.ingredients) {

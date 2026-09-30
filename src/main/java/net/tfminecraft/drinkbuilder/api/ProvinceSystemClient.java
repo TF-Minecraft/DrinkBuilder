@@ -7,10 +7,12 @@ import java.util.List;
 import java.util.Map;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.ToNumberPolicy;
 
 import net.tfminecraft.drinkbuilder.Cache;
 
@@ -19,7 +21,9 @@ import net.tfminecraft.drinkbuilder.Cache;
  */
 public final class ProvinceSystemClient {
 
-	private static final Gson GSON = new Gson();
+	private static final Gson GSON = new GsonBuilder()
+		.setObjectToNumberStrategy(ToNumberPolicy.BIG_DECIMAL)
+		.create();
 
 	private ProvinceSystemClient() {}
 

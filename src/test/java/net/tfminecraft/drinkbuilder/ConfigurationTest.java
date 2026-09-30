@@ -25,6 +25,24 @@ class ConfigurationTest {
     private java.io.File yaml(String content) throws Exception {
         return Files.writeString(dir.resolve("input.yml"), content).toFile();
     }
+    @Test void bundledCatalogKeepsCollectableHerbsAndExcludesRetiredHerbs() throws Exception {
+        try (var stream = getClass().getResourceAsStream("/ingredients.yml")) {
+            assertNotNull(stream);
+            var file = dir.resolve("ingredients.yml");
+            Files.copy(stream, file);
+            new IngredientsLoader().loadIngredients(file.toFile());
+        }
+        var exotic = new HashSet<String>();
+        for (var ingredient : Cache.ingredients) {
+            if (ingredient.category.equals("exotic") && ingredient.type.equals("mmoitems")) {
+                exotic.add(ingredient.id);
+            }
+        }
+        // Main's collector drop rules, plus Bark's independent gathering sources.
+        assertEquals(Set.of("birch_seed", "bark", "fire_leaf", "kelpberry", "thorn_root",
+            "clover", "dying_leaf", "autumn_leaf", "spot_leaf", "long_leaf",
+            "dwindle_leaf", "pumpkin_spore", "burrow_root"), exotic);
+    }
     @Test void configDefaultsAndNormalizedBounds() throws Exception {
         var loader = new ConfigLoader();
         loader.load(yaml("{}"));

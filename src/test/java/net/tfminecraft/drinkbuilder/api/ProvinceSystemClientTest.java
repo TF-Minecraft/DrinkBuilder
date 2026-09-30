@@ -8,12 +8,51 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.bukkit.configuration.file.YamlConfiguration;
 
 import net.tfminecraft.drinkbuilder.Cache;
+import net.tfminecraft.drinkbuilder.pack.RecipesYmlMerger;
 
 class ProvinceSystemClientTest {
+	@Test
+	void pendingRecipeAmountsKeepPrecisionThroughBreweryExport(@TempDir Path dir) throws IOException {
+		var originalIngredients = Cache.ingredients;
+		var originalFolder = Cache.breweryxFolder;
+		Cache.ingredients = List.of(new Cache.Ingredient("apple", "vanilla", "APPLE", "Apple", "produce"));
+		Cache.breweryxFolder = dir.toString();
+		try {
+			for (String amount : List.of("3", "5", "3.0", "5e0")) {
+				var drink = parsePendingDrinks("""
+					{"submissions":[{"id":"drink","recipe":{"ingredients":[
+					{"id":"apple","amount":%s}]}}]}
+					""".formatted(amount)).getFirst();
+				var row = (Map<?, ?>) ((List<?>) drink.recipe.get("ingredients")).getFirst();
+				assertEquals(new BigDecimal(amount), row.get("amount"));
+				RecipesYmlMerger.merge(null, drink, 20001, null);
+				var yaml = YamlConfiguration.loadConfiguration(dir.resolve("recipes.yml").toFile());
+				assertEquals(List.of("APPLE/" + new BigDecimal(amount).intValueExact()),
+					yaml.getStringList("recipes.drink.ingredients"));
+			}
+			String original = Files.readString(dir.resolve("recipes.yml"));
+			var fractional = parsePendingDrinks("""
+				{"submissions":[{"id":"drink","recipe":{"ingredients":[
+				{"id":"apple","amount":1.0000000000000001}]}}]}
+				""").getFirst();
+			assertThrows(IOException.class, () -> RecipesYmlMerger.merge(null, fractional, 20001, null));
+			assertEquals(original, Files.readString(dir.resolve("recipes.yml")));
+		} finally {
+			Cache.ingredients = originalIngredients;
+			Cache.breweryxFolder = originalFolder;
+		}
+	}
+
 	@Test
 	void catalogUsesExplicitOrCachedIngredientCountAndPropagatesGatewayErrors() {
 		var saved = Cache.ingredients;
@@ -213,7 +252,7 @@ class ProvinceSystemClientTest {
 		assertEquals("Ale", drink.displayName);
 		assertEquals("approved", drink.status);
 		assertEquals("tex", drink.textureId);
-		assertEquals(Map.of("name", "Ale", "time", 5.0), drink.recipe);
+		assertEquals(Map.of("name", "Ale", "time", new BigDecimal("5")), drink.recipe);
 		assertEquals(List.of("a.png", "42"), drink.files);
 		assertEquals("tex", drink.texture.id);
 		assertEquals(21000, drink.texture.cmd);
