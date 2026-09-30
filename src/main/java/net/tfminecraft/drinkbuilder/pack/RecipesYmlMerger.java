@@ -300,14 +300,15 @@ public final class RecipesYmlMerger {
 			if (id.isEmpty()) {
 				continue;
 			}
-			int amount = 1;
+			int amount;
 			try {
-				amount = Integer.parseInt(String.valueOf(amountObj));
-			} catch (Exception ignored) {
-				amount = 1;
+				// Gson decodes numbers in recipe maps as Doubles (e.g. 3.0).
+				amount = new BigDecimal(String.valueOf(amountObj)).intValueExact();
+			} catch (NumberFormatException | ArithmeticException e) {
+				throw new IOException("ingredient amount must be a positive integer for id=" + id, e);
 			}
 			if (amount < 1) {
-				amount = 1;
+				throw new IOException("ingredient amount must be a positive integer for id=" + id);
 			}
 			String token = null;
 			for (Cache.Ingredient ing : Cache.ingredients) {

@@ -60,7 +60,7 @@ class DrinkTextureItemTest {
 			  tfmc_drinks:drink: 20001
 			IRON_SWORD:
 			  other:sword: 10005
-			""", text);
+			""", text.replace("\r\n", "\n"));
 	}
 
 	@Test
@@ -82,7 +82,7 @@ class DrinkTextureItemTest {
 			  tfmc_drinks:new_drink: 20011
 			IRON_SWORD:
 			  other:sword: 10005
-			""", text);
+			""", text.replace("\r\n", "\n"));
 	}
 
     @Test
@@ -104,6 +104,6 @@ class DrinkTextureItemTest {
         DrinkTextureItem.pinPotionCmd(cache, "ns:old", 1);
         assertEquals(content, Files.readString(cache));
         DrinkTextureItem.pinPotionCmd(cache, " ns:new ", 2);
-        assertEquals(content + "  ns:new: 2\n", Files.readString(cache));
+        assertEquals(content + "  ns:new: 2\n", Files.readString(cache).replace("\r\n", "\n"));
     }
 }

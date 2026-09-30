@@ -17,6 +17,16 @@ It keeps the creator supplied with the ingredients and options the server suppor
 
 ## Failure recovery
 
+Ingredient quantities from website JSON retain their exact positive integer
+values when written to BreweryX. Invalid, fractional, or missing quantities fail
+the drink apply without replacing its existing recipe.
+
+The bundled ingredient allowlist omits retired herbs with no active acquisition
+source, even when MMOItems still defines them. Existing `ingredients.yml` files
+are preserved; operators should prune any retired entries there and sync the
+catalog. This does not replace ingredients in previously approved drinks; those
+recipes need their creators to choose available replacements.
+
 Failed texture publication restores the previous local files. If the website may
 have accepted the model ID, `pending-writes/` retains that reservation so the next
 pull retries with the same ID, including after a restart. Do not delete those
