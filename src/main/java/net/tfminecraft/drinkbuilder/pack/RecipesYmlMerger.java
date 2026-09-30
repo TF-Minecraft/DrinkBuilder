@@ -306,7 +306,7 @@ public final class RecipesYmlMerger {
 			}
 			int amount;
 			try {
-				// Gson decodes numbers in recipe maps as Doubles (e.g. 3.0).
+				// JSON recipe numbers can use decimal notation (e.g. 3.0).
 				amount = new BigDecimal(String.valueOf(amountObj)).intValueExact();
 			} catch (NumberFormatException | ArithmeticException e) {
 				throw new IOException("ingredient amount must be a positive integer for id=" + id, e);
