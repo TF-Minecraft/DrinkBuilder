@@ -19,7 +19,7 @@ It keeps the creator supplied with the ingredients and options the server suppor
 
 Ingredient quantities from website JSON retain their exact positive integer
 values when written to BreweryX. Invalid, fractional, or missing quantities fail
-the drink apply without replacing its existing recipe.
+the drink apply before texture publication or replacement of its existing recipe.
 
 The bundled ingredient allowlist omits retired herbs with no active acquisition
 source, even when MMOItems still defines them. Existing `ingredients.yml` files

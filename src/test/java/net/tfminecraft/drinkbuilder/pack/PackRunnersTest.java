@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
+import net.tfminecraft.drinkbuilder.Cache;
 import net.tfminecraft.drinkbuilder.DrinkBuilder;
 import net.tfminecraft.drinkbuilder.api.ProvinceSystemClient;
 import net.tfminecraft.drinkbuilder.api.ProvinceSystemClient.*;
@@ -69,6 +70,28 @@ class PackRunnersTest {
                 .thenReturn(new IaDrinksWriter.WriteResult(456, "drinks:new"));
             assertTrue(PackPullRunner.applyDrink(f.plugin, fresh, f.allocator, f.log));
             f.recipes.verify(() -> RecipesYmlMerger.merge(f.plugin, fresh, 456, f.log));
+        }
+    }
+
+    @Test void invalidIngredientsFailBeforeTextureWritesOrAllocation() throws Exception {
+        var original = Cache.ingredients;
+        Cache.ingredients = List.of(new Cache.Ingredient("apple", "vanilla", "APPLE", "Apple", "produce"));
+        var plugin = mock(DrinkBuilder.class);
+        var allocator = mock(CmdAllocator.class);
+        var log = mock(Logger.class);
+        try (var writer = mockStatic(IaDrinksWriter.class)) {
+            for (var recipe : List.<Map<String, Object>>of(
+                Map.of("ingredients", List.of(Map.of("id", "apple", "amount", 1.5))),
+                Map.of("ingredients", List.of(Map.of("id", "missing", "amount", 3))),
+                Map.of("ingredients", List.of()))) {
+                PendingDrink invalid = new PendingDrink("invalid", null, null, "Name", "approved",
+                    true, "texture", recipe, List.of(), null);
+                assertThrows(IOException.class, () -> PackPullRunner.applyDrink(plugin, invalid, allocator, log));
+            }
+            writer.verifyNoInteractions();
+            verifyNoInteractions(plugin, allocator, log);
+        } finally {
+            Cache.ingredients = original;
         }
     }
 

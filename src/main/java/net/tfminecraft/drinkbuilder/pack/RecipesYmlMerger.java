@@ -82,11 +82,7 @@ public final class RecipesYmlMerger {
 		section.set("name", names);
 		section.set("enabled", true);
 
-		List<String> ingredients = mapIngredients(recipe.get("ingredients"));
-		if (ingredients.isEmpty()) {
-			throw new IOException("recipe has no mappable ingredients for " + key);
-		}
-		section.set("ingredients", ingredients);
+		section.set("ingredients", validateIngredients(recipe, key));
 
 		setInt(section, "cookingtime", recipe.get("cooking_time"), 0);
 		setInt(section, "distillruns", recipe.get("distill_runs"), 0);
@@ -283,6 +279,14 @@ public final class RecipesYmlMerger {
 			throw new IOException("wood must be 0-13");
 		}
 		return code;
+	}
+
+	static List<String> validateIngredients(Map<String, Object> recipe, String key) throws IOException {
+		List<String> ingredients = mapIngredients(recipe.get("ingredients"));
+		if (ingredients.isEmpty()) {
+			throw new IOException("recipe has no mappable ingredients for " + key);
+		}
+		return ingredients;
 	}
 
 	private static List<String> mapIngredients(Object raw) throws IOException {

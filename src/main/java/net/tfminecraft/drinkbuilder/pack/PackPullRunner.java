@@ -142,6 +142,7 @@ public final class PackPullRunner {
 		CmdAllocator allocator,
 		Logger log
 	) throws Exception {
+		RecipesYmlMerger.validateIngredients(drink.recipe, drink.id);
 		Integer cmd = drink.existingCmd();
 		boolean wroteIa = false;
 		if (drink.needsIaWrite() || IaDrinksWriter.hasPendingWrite(plugin, drink.id)) {
