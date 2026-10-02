@@ -47,7 +47,7 @@ public final class RecipesYmlMerger {
 
 	private RecipesYmlMerger() {}
 
-	public static void merge(
+	public static synchronized void merge(
 		JavaPlugin plugin,
 		PendingDrink drink,
 		Integer customModelData,
@@ -166,7 +166,7 @@ public final class RecipesYmlMerger {
 		}
 	}
 
-	public static boolean remove(JavaPlugin plugin, String submissionId, Logger log)
+	public static synchronized boolean remove(JavaPlugin plugin, String submissionId, Logger log)
 		throws IOException {
 		String key = submissionId == null ? "" : submissionId.trim();
 		if (key.isEmpty()) {

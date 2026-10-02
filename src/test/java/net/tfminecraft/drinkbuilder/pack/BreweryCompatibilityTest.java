@@ -51,6 +51,7 @@ class BreweryCompatibilityTest {
         Hook.MMOITEMS.checked = Hook.ITEMSADDER.checked = true;
         ConfigManager.registrations = ConfigManager.recipeLoads = ConfigManager.cauldronLoads = ConfigManager.reloads = 0;
         ConfigManager.fail = false;
+        ConfigManager.failConfigReload = ConfigManager.failRecipeLoad = false;
     }
     @AfterEach void restore() { Cache.breweryxFolder = priorFolder; }
 
@@ -155,13 +156,116 @@ class BreweryCompatibilityTest {
             YamlConfiguration.loadConfiguration(file.toFile()).getStringList("recipes.drink.effects"));
     }
 
-    @Test void reportsOptionalApiFailures() {
+    @Test void retriesRegistrationAfterAnOptionalApiFailureWithoutAnotherHookChange() {
         Plugin mmo = mock(Plugin.class);
         when(manager.getPlugin("MMOItems")).thenReturn(mmo);
         when(mmo.isEnabled()).thenReturn(true);
         ConfigManager.fail = true;
         BreweryCompatibility.recover(plugin, brewery);
         verify(log).warning(contains("compatibility repair failed"));
+        assertTrue(Hook.MMOITEMS.enabled);
+        ConfigManager.fail = false;
+        BreweryCompatibility.recover(plugin, brewery);
+        assertEquals(1, ConfigManager.registrations);
+        assertEquals(1, ConfigManager.recipeLoads);
+        BreweryCompatibility.recover(plugin, brewery);
+        assertEquals(1, ConfigManager.registrations);
+        assertEquals(1, ConfigManager.recipeLoads);
+    }
+
+    @Test void retriesConfigReloadAfterPersistingMigratedEffects() throws Exception {
+        Path file = directory.resolve("recipes.yml");
+        Files.writeString(file, "recipes:\n  drink:\n    effects: [CONFUSION/1/20]\n");
+        ConfigManager.failConfigReload = true;
+        BreweryCompatibility.recover(plugin, brewery);
+        assertEquals(List.of("NAUSEA/1/20"),
+            YamlConfiguration.loadConfiguration(file.toFile()).getStringList("recipes.drink.effects"));
+        assertEquals(0, ConfigManager.recipeLoads);
+        ConfigManager.failConfigReload = false;
+        BreweryCompatibility.recover(plugin, brewery);
+        assertEquals(1, ConfigManager.reloads);
+        assertEquals(1, ConfigManager.recipeLoads);
+        BreweryCompatibility.recover(plugin, brewery);
+        assertEquals(1, ConfigManager.reloads);
+        assertEquals(1, ConfigManager.recipeLoads);
+    }
+
+    @Test void retriesIncompleteRecipeLoadingWithoutRepeatingCompletedSteps() throws Exception {
+        Path file = directory.resolve("recipes.yml");
+        Files.writeString(file, "recipes:\n  drink:\n    effects: [CONFUSION/1/20]\n");
+        ConfigManager.failRecipeLoad = true;
+        BreweryCompatibility.recover(plugin, brewery);
+        assertEquals(1, ConfigManager.reloads);
+        assertEquals(1, ConfigManager.cauldronLoads);
+        assertEquals(0, ConfigManager.recipeLoads);
+        ConfigManager.failRecipeLoad = false;
+        BreweryCompatibility.recover(plugin, brewery);
+        assertEquals(1, ConfigManager.reloads);
+        assertEquals(2, ConfigManager.cauldronLoads);
+        assertEquals(1, ConfigManager.recipeLoads);
+        BreweryCompatibility.recover(plugin, brewery);
+        assertEquals(2, ConfigManager.cauldronLoads);
+        assertEquals(1, ConfigManager.recipeLoads);
+    }
+
+    @Test void migrationPreservesConcurrentRecipeDeletionAndPublication() throws Exception {
+        Path file = directory.resolve("recipes.yml");
+        String original = "recipes:\n  existing:\n    name: Existing\n    effects: [CONFUSION/1/20]\n  keep:\n    effects: [CONFUSION/1/20]\n";
+        List<Cache.Ingredient> priorIngredients = Cache.ingredients;
+        try {
+            Cache.ingredients = List.of(new Cache.Ingredient("apple", "vanilla", "APPLE", "Apple", null));
+            Files.writeString(file, original);
+            writeDuringMigration(file, () -> RecipesYmlMerger.remove(null, "existing", null));
+            assertFalse(YamlConfiguration.loadConfiguration(file.toFile()).contains("recipes.existing"));
+
+            Files.writeString(file, original);
+            var drink = new net.tfminecraft.drinkbuilder.api.ProvinceSystemClient.PendingDrink(
+                "published", null, null, "Published", "approved", false, null,
+                java.util.Map.of("ingredients", List.of(java.util.Map.of("id", "apple", "amount", 1))),
+                null, null);
+            writeDuringMigration(file, () -> {
+                RecipesYmlMerger.merge(null, drink, 20001, null);
+                return null;
+            });
+            var yaml = YamlConfiguration.loadConfiguration(file.toFile());
+            assertEquals("Published/Published/Published", yaml.getString("recipes.published.name"));
+            assertEquals(List.of("APPLE/1"), yaml.getStringList("recipes.published.ingredients"));
+            assertEquals(List.of("NAUSEA/1/20"), yaml.getStringList("recipes.keep.effects"));
+        } finally {
+            Cache.ingredients = priorIngredients;
+        }
+    }
+
+    private void writeDuringMigration(Path file, java.util.concurrent.Callable<?> writer) throws Exception {
+        var started = new java.util.concurrent.CountDownLatch(1);
+        var complete = new java.util.concurrent.CompletableFuture<Void>();
+        Thread contender = new Thread(() -> {
+            started.countDown();
+            try {
+                writer.call();
+                complete.complete(null);
+            } catch (Throwable e) {
+                complete.completeExceptionally(e);
+            }
+        }, "concurrent-recipe-writer");
+        try (var files = mockStatic(Files.class, call -> {
+            if (call.getMethod().getName().equals("copy")) {
+                // The migration has read its snapshot; attempt the other write
+                // before it commits that snapshot back to recipes.yml.
+                contender.start();
+                assertTrue(started.await(5, java.util.concurrent.TimeUnit.SECONDS));
+                long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+                while (contender.isAlive() && contender.getState() != Thread.State.BLOCKED
+                    && System.nanoTime() < deadline) {
+                    Thread.sleep(1);
+                }
+                assertTrue(!contender.isAlive() || contender.getState() == Thread.State.BLOCKED);
+            }
+            return call.callRealMethod();
+        })) {
+            assertTrue(BreweryCompatibility.migrateEffects(file.toFile()));
+        }
+        complete.get(5, java.util.concurrent.TimeUnit.SECONDS);
     }
 
     @Test void translatesLegacyNamesWithoutChangingEffectRanges() {
