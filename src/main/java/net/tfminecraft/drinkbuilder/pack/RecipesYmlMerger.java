@@ -47,7 +47,7 @@ public final class RecipesYmlMerger {
 
 	private RecipesYmlMerger() {}
 
-	public static void merge(
+	public static synchronized void merge(
 		JavaPlugin plugin,
 		PendingDrink drink,
 		Integer customModelData,
@@ -166,7 +166,7 @@ public final class RecipesYmlMerger {
 		}
 	}
 
-	public static boolean remove(JavaPlugin plugin, String submissionId, Logger log)
+	public static synchronized boolean remove(JavaPlugin plugin, String submissionId, Logger log)
 		throws IOException {
 		String key = submissionId == null ? "" : submissionId.trim();
 		if (key.isEmpty()) {
@@ -338,7 +338,7 @@ public final class RecipesYmlMerger {
 			if (row instanceof String s) {
 				String t = s.trim();
 				if (!t.isEmpty()) {
-					out.add(t.toUpperCase(Locale.ROOT));
+					out.add(BreweryCompatibility.effectToken(t));
 				}
 				continue;
 			}
@@ -349,7 +349,7 @@ public final class RecipesYmlMerger {
 			if (type == null || type.isBlank()) {
 				continue;
 			}
-			type = type.trim().toUpperCase(Locale.ROOT);
+			type = BreweryCompatibility.effectToken(type);
 			Object level = map.get("level");
 			Object duration = map.get("duration");
 			if (level != null && duration != null) {

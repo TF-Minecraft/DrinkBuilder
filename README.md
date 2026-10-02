@@ -17,6 +17,22 @@ It keeps the creator supplied with the ingredients and options the server suppor
 
 ## Failure recovery
 
+After plugin startup and DrinkBuilder reloads, DrinkBuilder restores BreweryX's
+native MMOItems and ItemsAdder hooks if an optional-dependency cycle caused
+BreweryX to cache them as disabled. Recipes and cauldron ingredients are then
+loaded again, including existing drinks. The `MMOItems:ID` ingredient format
+is retained for both the website catalog and in-game recipes.
+
+Legacy potion effect names are translated to their current names when publishing
+drinks (for example, `CONFUSION` becomes `NAUSEA`). Existing BreweryX recipes
+receive the same migration, with a `recipes-before-effect-migration-*.bak` copy
+saved first. Invalid YAML is left untouched and reported in the server log.
+The compatibility API has been verified against BreweryX 3.7.0 on Paper 1.21.10.
+Migration, publication, and removal share a recipe write lock, so concurrent
+DrinkBuilder operations cannot overwrite each other's changes. If BreweryX's
+registration or live reload fails partway through recovery, unfinished steps
+are retained and retried on the next DrinkBuilder reload.
+
 Ingredient quantities from website JSON retain their exact positive integer
 values when written to BreweryX. Invalid, fractional, or missing quantities fail
 the drink apply before texture publication or replacement of its existing recipe.
@@ -44,7 +60,7 @@ Run `mvn clean verify` with Java 21 and the pinned plugin dependencies installed
 (the build workflow prepares them). JaCoCo writes HTML and XML reports to
 `target/site/jacoco/`; CI uploads the report as a `coverage-report` artifact.
 
-The suite currently has 145 passing tests: **99.73% line coverage, 97.71% branch
+The suite currently has 164 passing tests: **99.74% line coverage, 97.78% branch
 coverage, and 100% method/class coverage**, with no production-code exclusions.
 The Maven gate permits at most 6 missed lines and 32 missed branches, and no
 missed methods or classes, so additional uncovered code fails verification.

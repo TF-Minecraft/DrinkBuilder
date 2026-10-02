@@ -5,7 +5,7 @@ version: ${project.version}
 author: TFMC
 
 depend: [TLibs, TFMCWeb]
-softdepend: [ItemsAdder]
+softdepend: [ItemsAdder, BreweryX]
 commands:
   drinkbuilder:
     usage: /drinkbuilder reload|catalog sync|pack pull [force]|pack reapply <id>|drink delete <id>
