@@ -38,7 +38,7 @@ public final class BreweryCompatibility {
     public static void schedule(JavaPlugin plugin) {
         // One tick also handles DrinkBuilder being enabled before MMOItems due to dependency cycles.
         Plugin brewery = plugin.getServer().getPluginManager().getPlugin("BreweryX");
-        if (brewery != null && brewery.isEnabled()) {
+        if (brewery != null) {
             plugin.getServer().getScheduler().runTask(plugin, () -> recover(plugin, brewery));
         }
     }

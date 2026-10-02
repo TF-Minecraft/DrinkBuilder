@@ -60,7 +60,8 @@ class BreweryCompatibilityTest {
         when(manager.getPlugin("BreweryX")).thenReturn(brewery);
         when(brewery.isEnabled()).thenReturn(false);
         BreweryCompatibility.schedule(plugin);
-        verifyNoInteractions(scheduler);
+        verify(scheduler).runTask(eq(plugin), any(Runnable.class));
+        clearInvocations(scheduler);
         when(brewery.isEnabled()).thenReturn(true);
         doAnswer(call -> { call.getArgument(1, Runnable.class).run(); return null; })
             .when(scheduler).runTask(eq(plugin), any(Runnable.class));
