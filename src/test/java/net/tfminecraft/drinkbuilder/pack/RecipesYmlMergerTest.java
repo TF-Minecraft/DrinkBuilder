@@ -102,6 +102,14 @@ class RecipesYmlMergerTest {
 	}
 
 	@Test
+	void translatesConfusionFromWebsiteObjectsAndLegacyStrings() throws IOException {
+		Map<String, Object> recipe = baseRecipe();
+		recipe.put("effects", List.of(Map.of("type", "confusion", "level", "1-2", "duration", "30-60"), "confusion/1/20"));
+		RecipesYmlMerger.merge(null, drink("effects", "Name", recipe), 20001, null);
+		assertEquals(List.of("NAUSEA/1-2/30-60", "NAUSEA/1/20"), load().getStringList("recipes.effects.effects"));
+	}
+
+	@Test
 	void rejectsInvalidQuantitiesWithoutOverwritingExistingRecipes() throws IOException {
 		Files.createDirectories(recipeFile().getParent());
 		String original = "recipes:\n  existing:\n    name: Keep\n";
@@ -194,7 +202,7 @@ class RecipesYmlMergerTest {
 		assertEquals("&#123456H&#123456i", section.getString("drinkmessage"));
 		assertEquals("Title", section.getString("drinktitle"));
 		assertTrue(section.getBoolean("glint"));
-		assertEquals(List.of("SPEED/1/20", "JUMP/2/30", "HASTE/40", "STRENGTH/1", "REGENERATION"), section.getStringList("effects"));
+		assertEquals(List.of("SPEED/1/20", "JUMP_BOOST/2/30", "HASTE/40", "STRENGTH/1", "REGENERATION"), section.getStringList("effects"));
 		assertFalse(section.contains("server_commands"));
 		assertFalse(section.contains("player_commands"));
 		assertFalse(section.contains("color"));

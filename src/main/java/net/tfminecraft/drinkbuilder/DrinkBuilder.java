@@ -16,6 +16,7 @@ import net.tfminecraft.drinkbuilder.loaders.IngredientsLoader;
 import net.tfminecraft.drinkbuilder.loaders.PermissionGroupsLoader;
 import net.tfminecraft.drinkbuilder.managers.CommandManager;
 import net.tfminecraft.drinkbuilder.pack.CmdAllocator;
+import net.tfminecraft.drinkbuilder.pack.BreweryCompatibility;
 import net.tfminecraft.drinkbuilder.pack.DeferredDrinkIaReload;
 import net.tfminecraft.drinkbuilder.pack.IaDrinksScaffold;
 import net.tfminecraft.drinkbuilder.pack.ItemsAdderPackListener;
@@ -116,6 +117,7 @@ public class DrinkBuilder extends JavaPlugin {
 			packPullScheduler.start();
 		}
 		IaDrinksScaffold.ensure(this);
+		BreweryCompatibility.schedule(this);
 	}
 
 	private void saveDefaultConfigs() {
