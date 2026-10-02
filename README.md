@@ -56,7 +56,7 @@ Run `mvn clean verify` with Java 21 and the pinned plugin dependencies installed
 (the build workflow prepares them). JaCoCo writes HTML and XML reports to
 `target/site/jacoco/`; CI uploads the report as a `coverage-report` artifact.
 
-The suite currently has 159 passing tests: **99.74% line coverage, 97.78% branch
+The suite currently has 161 passing tests: **99.74% line coverage, 97.78% branch
 coverage, and 100% method/class coverage**, with no production-code exclusions.
 The Maven gate permits at most 6 missed lines and 32 missed branches, and no
 missed methods or classes, so additional uncovered code fails verification.

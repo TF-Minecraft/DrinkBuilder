@@ -67,7 +67,12 @@ public final class BreweryCompatibility {
                 configs.getMethod("registerDefaultPluginItems").invoke(null);
             }
             File recipes = new File(RecipesYmlMerger.resolvePath(plugin, Cache.breweryxFolder), "recipes.yml");
-            boolean migrated = migrateEffects(recipes);
+            boolean migrated = false;
+            try {
+                migrated = migrateEffects(recipes);
+            } catch (IOException e) {
+                plugin.getLogger().warning("[brewery] recipe effect migration skipped: " + e);
+            }
             if (migrated) {
                 Class<?> recipeFile = Class.forName("com.dre.brewery.configuration.files.RecipesFile", true, loader);
                 configs.getMethod("newInstance", Class.class, boolean.class).invoke(null, recipeFile, true);
@@ -77,7 +82,7 @@ public final class BreweryCompatibility {
                 configs.getMethod("loadRecipes").invoke(null);
                 plugin.getLogger().info("[brewery] restored custom-item hooks and recipe effects after plugin startup");
             }
-        } catch (ReflectiveOperationException | IOException | LinkageError e) {
+        } catch (ReflectiveOperationException | LinkageError e) {
             plugin.getLogger().warning("[brewery] compatibility repair failed: " + e);
         }
     }
@@ -115,8 +120,12 @@ public final class BreweryCompatibility {
             java.nio.file.Path temporary = Files.createTempFile(file.toPath().getParent(), "recipes-effects-", ".tmp");
             try {
                 yaml.save(temporary.toFile());
-                Files.move(temporary, file.toPath(), StandardCopyOption.REPLACE_EXISTING,
-                    StandardCopyOption.ATOMIC_MOVE);
+                try {
+                    Files.move(temporary, file.toPath(), StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.ATOMIC_MOVE);
+                } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                    Files.move(temporary, file.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                }
             } finally {
                 Files.deleteIfExists(temporary);
             }

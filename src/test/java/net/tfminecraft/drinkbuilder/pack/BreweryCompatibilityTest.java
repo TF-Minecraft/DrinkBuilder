@@ -119,8 +119,40 @@ class BreweryCompatibilityTest {
         Files.writeString(file, "recipes: [invalid\n");
         assertThrows(IOException.class, () -> BreweryCompatibility.migrateEffects(file.toFile()));
         BreweryCompatibility.recover(plugin, brewery);
-        verify(log).warning(contains("compatibility repair failed"));
+        verify(log).warning(contains("recipe effect migration skipped"));
         assertEquals("recipes: [invalid\n", Files.readString(file));
+    }
+
+    @Test void rebuildsRecipesAfterHookRepairEvenWhenEffectMigrationFails() throws Exception {
+        Path file = directory.resolve("recipes.yml");
+        Files.writeString(file, "recipes: [invalid\n");
+        Plugin mmo = mock(Plugin.class);
+        when(manager.getPlugin("MMOItems")).thenReturn(mmo);
+        when(mmo.isEnabled()).thenReturn(true);
+        BreweryCompatibility.recover(plugin, brewery);
+        assertEquals(1, ConfigManager.registrations);
+        assertEquals(1, ConfigManager.recipeLoads);
+        assertEquals(1, ConfigManager.cauldronLoads);
+        assertEquals(0, ConfigManager.reloads);
+        verify(log).warning(contains("recipe effect migration skipped"));
+        assertEquals("recipes: [invalid\n", Files.readString(file));
+    }
+
+    @Test void replacesRecipesWhenAtomicMovesAreUnsupported() throws Exception {
+        Path file = directory.resolve("recipes.yml");
+        Files.writeString(file, "recipes:\n  drink:\n    effects: [CONFUSION/1/20]\n");
+        try (var files = mockStatic(Files.class, call -> {
+            if (call.getMethod().getName().equals("move")
+                && java.util.Arrays.asList((java.nio.file.CopyOption[]) call.getRawArguments()[2])
+                    .contains(java.nio.file.StandardCopyOption.ATOMIC_MOVE)) {
+                throw new java.nio.file.AtomicMoveNotSupportedException("temporary", "recipes", "test filesystem");
+            }
+            return call.callRealMethod();
+        })) {
+            assertTrue(BreweryCompatibility.migrateEffects(file.toFile()));
+        }
+        assertEquals(List.of("NAUSEA/1/20"),
+            YamlConfiguration.loadConfiguration(file.toFile()).getStringList("recipes.drink.effects"));
     }
 
     @Test void reportsOptionalApiFailures() {
