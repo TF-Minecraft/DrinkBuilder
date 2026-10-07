@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.regex.Pattern;
 
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -35,6 +36,7 @@ public final class BreweryCompatibility {
         Map.entry("INCREASE_DAMAGE", "STRENGTH"), Map.entry("HEAL", "INSTANT_HEALTH"),
         Map.entry("HARM", "INSTANT_DAMAGE"), Map.entry("JUMP", "JUMP_BOOST"),
         Map.entry("DAMAGE_RESISTANCE", "RESISTANCE"));
+    private static final Pattern WHOLE_DECIMAL = Pattern.compile("(?<![\\d.])(\\d+)\\.0+(?![\\d.])");
 
     private BreweryCompatibility() {}
 
@@ -42,8 +44,9 @@ public final class BreweryCompatibility {
         String normalized = token.trim().toUpperCase(Locale.ROOT);
         int slash = normalized.indexOf('/');
         String name = slash < 0 ? normalized : normalized.substring(0, slash);
+        // Website JSON numbers arrive as doubles; BreweryX reads "45.0" as 0, which drops the effect.
         return EFFECT_NAMES.getOrDefault(name, name)
-            + (slash < 0 ? "" : normalized.substring(slash));
+            + (slash < 0 ? "" : WHOLE_DECIMAL.matcher(normalized.substring(slash)).replaceAll("$1"));
     }
 
     public static void schedule(JavaPlugin plugin) {
