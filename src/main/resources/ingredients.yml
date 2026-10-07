@@ -100,6 +100,11 @@ ingredients:
     brewery_token: Chorus_Fruit
     label: Chorus Fruit
     category: exotic
+  - id: amethyst_shard
+    type: vanilla
+    brewery_token: Amethyst_Shard
+    label: Amethyst Shard
+    category: exotic
   - id: fermented_spider_eye
     type: vanilla
     brewery_token: Fermented_Spider_Eye
