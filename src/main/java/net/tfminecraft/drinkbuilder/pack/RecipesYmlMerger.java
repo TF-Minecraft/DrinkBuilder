@@ -349,18 +349,16 @@ public final class RecipesYmlMerger {
 			if (type == null || type.isBlank()) {
 				continue;
 			}
-			type = BreweryCompatibility.effectToken(type);
 			Object level = map.get("level");
 			Object duration = map.get("duration");
 			if (level != null && duration != null) {
-				out.add(type + "/" + level + "/" + duration);
+				type = type + "/" + level + "/" + duration;
 			} else if (duration != null) {
-				out.add(type + "/" + duration);
+				type = type + "/" + duration;
 			} else if (level != null) {
-				out.add(type + "/" + level);
-			} else {
-				out.add(type);
+				type = type + "/" + level;
 			}
+			out.add(BreweryCompatibility.effectToken(type));
 		}
 		return out;
 	}

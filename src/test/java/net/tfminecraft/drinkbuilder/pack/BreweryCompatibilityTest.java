@@ -276,4 +276,19 @@ class BreweryCompatibilityTest {
             assertEquals(modern[i] + "/1-2/30-60", BreweryCompatibility.effectToken(old[i] + "/1-2/30-60"));
         }
     }
+
+    @Test void writesWholeDecimalNumbersAsIntegersForBreweryX() {
+        assertEquals("BLINDNESS/45/10", BreweryCompatibility.effectToken("blindness/45.0/10.0"));
+        assertEquals("NAUSEA/1-2/30-60", BreweryCompatibility.effectToken("confusion/1.0-2.0/30.00-60.0"));
+        assertEquals("HASTE/40", BreweryCompatibility.effectToken("haste/40.0"));
+        assertEquals("POISON/1.5/10", BreweryCompatibility.effectToken("poison/1.5/10.0"));
+    }
+
+    @Test void migratesDecimalEffectNumbersInExistingRecipes() throws Exception {
+        Path file = directory.resolve("recipes.yml");
+        Files.writeString(file, "recipes:\n  drink:\n    effects: [BLINDNESS/45.0/10.0, POISON/1/5]\n");
+        assertTrue(BreweryCompatibility.migrateEffects(file.toFile()));
+        assertEquals(List.of("BLINDNESS/45/10", "POISON/1/5"),
+            YamlConfiguration.loadConfiguration(file.toFile()).getStringList("recipes.drink.effects"));
+    }
 }

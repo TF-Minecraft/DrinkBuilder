@@ -107,6 +107,12 @@ class RecipesYmlMergerTest {
 		recipe.put("effects", List.of(Map.of("type", "confusion", "level", "1-2", "duration", "30-60"), "confusion/1/20"));
 		RecipesYmlMerger.merge(null, drink("effects", "Name", recipe), 20001, null);
 		assertEquals(List.of("NAUSEA/1-2/30-60", "NAUSEA/1/20"), load().getStringList("recipes.effects.effects"));
+
+		// Gson parses website JSON numbers as doubles.
+		recipe.put("effects", List.of(Map.of("type", "blindness", "level", 45.0, "duration", 10.0),
+			Map.of("type", "haste", "duration", 40.0)));
+		RecipesYmlMerger.merge(null, drink("effects", "Name", recipe), 20001, null);
+		assertEquals(List.of("BLINDNESS/45/10", "HASTE/40"), load().getStringList("recipes.effects.effects"));
 	}
 
 	@Test
