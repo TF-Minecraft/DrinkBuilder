@@ -30,6 +30,7 @@ Run `mvn clean verify` with Java 21 and the pinned plugin dependencies installed
 temporary files, mocked server/API boundaries and test-only optional-plugin
 fixtures; it does not boot a Minecraft server.
 
+Surefire writes test results to `target/surefire-reports/`.
 JaCoCo writes HTML and XML reports to `target/site/jacoco/`, and CI uploads them
 as a `coverage-report-*` artifact. The Maven gate fails verification if more than
 6 lines or 32 branches are missed, or if any method or class is missed.
