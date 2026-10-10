@@ -46,6 +46,9 @@ public final class IaDrinksScaffold {
 					"[ia] could not create textures dir: " + textures.getAbsolutePath()
 				);
 			}
+			if (DrinkBottleModels.syncQuietly(plugin, plugin.getLogger())) {
+				plugin.getLogger().info("[ia] updated " + ns + " bottle models; players get them after the next iazip");
+			}
 		} catch (IOException e) {
 			plugin.getLogger().warning("[ia] scaffold failed: " + e.getMessage());
 		}
