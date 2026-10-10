@@ -67,7 +67,12 @@ public final class DrinkBottleModels {
 	 */
 	static boolean sync(Path root, String ns, Path cache) throws IOException {
 		synchronized (IaDrinksWriter.class) {
-			Map<Integer, String> drinks = texturedDrinks(root, ns, cache);
+			Path itemsYml = root.resolve("configs/items.yml");
+			if (!Files.isRegularFile(itemsYml)) {
+				// A missing items.yml is not "no drinks"; leave every bottle model in place.
+				return false;
+			}
+			Map<Integer, String> drinks = texturedDrinks(root, itemsYml, ns, cache);
 			Path resources = root.resolve("resourcepack");
 			Path models = resources.resolve(ns + "/models/item/" + FOLDER);
 			Path empty = resources.resolve(ns + "/textures/item/" + FOLDER + "/empty.png");
@@ -108,13 +113,10 @@ public final class DrinkBottleModels {
 	}
 
 	/** Drinks with an items.yml entry, a texture and a pinned CMD, ordered by CMD. */
-	private static Map<Integer, String> texturedDrinks(Path root, String ns, Path cache) throws IOException {
+	private static Map<Integer, String> texturedDrinks(Path root, Path itemsYml, String ns, Path cache)
+		throws IOException {
 		Map<String, Integer> cmds = potionCmds(cache, ns);
 		Map<Integer, String> drinks = new TreeMap<>();
-		Path itemsYml = root.resolve("configs/items.yml");
-		if (!Files.isRegularFile(itemsYml)) {
-			return drinks;
-		}
 		ConfigurationSection items = IaDrinksWriter.loadYaml(itemsYml).getConfigurationSection("items");
 		if (items == null) {
 			return drinks;

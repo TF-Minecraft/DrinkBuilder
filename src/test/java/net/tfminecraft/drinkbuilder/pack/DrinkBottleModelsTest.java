@@ -124,8 +124,18 @@ class DrinkBottleModelsTest {
         assertFalse(Files.exists(empty));
         assertFalse(Files.exists(models.resolve("ale.json")));
         assertFalse(DrinkBottleModels.sync(plugin));
+    }
+
+    @Test void missingItemsYmlKeepsTheGeneratedFiles() throws Exception {
+        DrinkBottleModels.sync(plugin);
+        byte[] before = Files.readAllBytes(potion);
         Files.delete(items);
+
         assertFalse(DrinkBottleModels.sync(plugin));
+
+        assertArrayEquals(before, Files.readAllBytes(potion));
+        assertTrue(Files.exists(empty));
+        assertTrue(Files.exists(models.resolve("ale.json")));
     }
 
     @Test void unreadableInputsLeaveExistingFilesAlone() throws Exception {
