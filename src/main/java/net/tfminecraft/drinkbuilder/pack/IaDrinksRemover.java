@@ -80,6 +80,7 @@ public final class IaDrinksRemover {
 				log.info("[ia] deleted texture " + png.getName());
 			}
 		}
-		return changed;
+		// Also clears bottle models left behind by an earlier removal.
+		return DrinkBottleModels.syncQuietly(plugin, log) || changed;
 	}
 }

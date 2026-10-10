@@ -189,6 +189,7 @@ public final class IaDrinksWriter {
 				log.warning("[ia] published " + iaItemId + " but could not remove pending write: " + e.getMessage());
 			}
 		}
+		DrinkBottleModels.syncQuietly(plugin, log);
 		if (log != null) {
 			log.info("[ia] wrote " + iaItemId + " cmd=" + cmd + " png=" + png.getFileName());
 		}
@@ -199,7 +200,7 @@ public final class IaDrinksWriter {
 		return plugin.getDataFolder().toPath().resolve("pending-writes").resolve(sid + ".yml");
 	}
 
-	private static YamlConfiguration loadYaml(Path path) throws IOException {
+	static YamlConfiguration loadYaml(Path path) throws IOException {
 		YamlConfiguration yaml = new YamlConfiguration();
 		try {
 			yaml.load(path.toFile());
