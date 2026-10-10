@@ -440,7 +440,7 @@ public final class RecipesYmlMerger {
 		return out;
 	}
 
-	static String ampersandHex(String line) {
+	private static String ampersandHex(String line) {
 		return BARE_HEX.matcher(line).replaceAll("&#$1");
 	}
 
