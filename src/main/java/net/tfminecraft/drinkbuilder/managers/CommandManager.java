@@ -198,12 +198,7 @@ public final class CommandManager implements CommandExecutor, TabCompleter {
 		}
 		if (args.length == 2 && "pack".equalsIgnoreCase(args[0])) {
 			String p = args[1].toLowerCase(Locale.ROOT);
-			if ("pull".startsWith(p)) {
-				return Collections.singletonList("pull");
-			}
-			if ("reapply".startsWith(p)) {
-				return Collections.singletonList("reapply");
-			}
+			return List.of("pull", "reapply").stream().filter(action -> action.startsWith(p)).toList();
 		}
 		if (args.length == 2 && "drink".equalsIgnoreCase(args[0])) {
 			String p = args[1].toLowerCase(Locale.ROOT);

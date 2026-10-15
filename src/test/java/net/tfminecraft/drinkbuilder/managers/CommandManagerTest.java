@@ -266,6 +266,7 @@ class CommandManagerTest {
 		assertEquals(List.of("sync"), complete("CATALOG", "S"));
 		assertEquals(List.of(), complete("catalog", "other"));
 		assertEquals(List.of("pull"), complete("PACK", "P"));
+		assertEquals(List.of("pull", "reapply"), complete("pack", ""));
 		assertEquals(List.of("reapply"), complete("pack", "R"));
 		assertEquals(List.of(), complete("pack", "other"));
 		assertEquals(List.of("delete"), complete("DRINK", "D"));
