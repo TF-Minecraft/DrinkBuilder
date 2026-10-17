@@ -4,7 +4,7 @@
 
 DrinkBuilder connects the website's drink creator with the server's brewing and custom-item systems. Players design drinks through the web experience, staff review submissions, and this plugin brings approved drinks into Minecraft with their recipes and visual identity.
 
-It keeps the creator supplied with the ingredients and options the server supports, then handles the in-game side of publishing a drink. The web interface lives in [ProvinceSystem](https://github.com/TF-Minecraft/ProvinceSystem).
+It keeps the creator supplied with the ingredients and options the server supports, then handles the in-game side of publishing a drink. The web interface lives in [TFMCWeb](https://github.com/TF-Minecraft/TFMCWeb).
 
 ## Features
 
