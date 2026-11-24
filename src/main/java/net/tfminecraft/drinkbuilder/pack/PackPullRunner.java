@@ -202,8 +202,10 @@ public final class PackPullRunner {
 					}
 					if (!brewOk) {
 						plugin.getLogger().warning("[pack] failed to dispatch brew reload");
-						// Merge these again next poll so BreweryX still picks them up.
+						// Merge these again next poll so BreweryX still picks them up, and keep them
+						// pending on the website: an acked drink is no longer listed for that poll.
 						breweryMerged.forEach(RecipesYmlMerger::forget);
+						ackImmediate.removeAll(breweryMerged);
 					} else {
 						plugin.getLogger().info("[pack] brew reload dispatched");
 					}

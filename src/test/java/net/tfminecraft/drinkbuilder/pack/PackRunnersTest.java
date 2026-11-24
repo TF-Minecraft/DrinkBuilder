@@ -6,8 +6,11 @@ import static org.mockito.Mockito.*;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 import net.tfminecraft.drinkbuilder.Cache;
@@ -173,6 +176,48 @@ class PackRunnersTest {
             verify(f.log).warning("[pack] brew reload threw: boom");
             verify(f.log, times(2)).warning("[pack] failed to dispatch brew reload");
             f.recipes.verify(() -> RecipesYmlMerger.forget("plain"), times(2));
+        }
+    }
+
+    @Test void failedBreweryReloadKeepsMergedDrinksPendingAndAcksOnlyUnchangedOnes() {
+        for (boolean force : new boolean[] {false, true}) {
+            for (boolean throwing : new boolean[] {false, true}) {
+                try (Fixture f = new Fixture()) {
+                    PendingDrink fresh = drink(" fresh ", "approved", null, null);
+                    PendingDrink steady = drink(" steady ", "approved", null, null);
+                    PendingDrink textured = drink(" textured ", "approved", null, "tex");
+                    f.writer.when(() -> IaDrinksWriter.write(f.plugin, textured, f.allocator, f.log))
+                        .thenReturn(new IaDrinksWriter.WriteResult(456, "drinks:textured"));
+                    f.api.when(ProvinceSystemClient::listPendingApply)
+                        .thenReturn(ListResult.success(List.of(fresh, steady, textured)));
+                    f.api.when(() -> ProvinceSystemClient.markApplied(any())).thenAnswer(inv -> AppliedResult.success(inv.getArgument(0)));
+                    // Stand-in for the session fingerprints: "steady" was merged and reloaded earlier.
+                    Set<String> merged = new HashSet<>(Set.of("steady"));
+                    f.recipes.when(() -> RecipesYmlMerger.mergeIfChanged(any(), any(), any(), any()))
+                        .thenAnswer(inv -> merged.add(inv.getArgument(1, PendingDrink.class).id.trim()));
+                    f.recipes.when(() -> RecipesYmlMerger.forget(anyString()))
+                        .thenAnswer(inv -> merged.remove(inv.getArgument(0, String.class)));
+                    AtomicBoolean broken = new AtomicBoolean(true);
+                    f.bukkit.when(() -> Bukkit.dispatchCommand(any(), anyString())).thenAnswer(inv -> {
+                        if (broken.get() && throwing) throw new CommandException("boom");
+                        return !broken.get();
+                    });
+                    List<PackPullRunner.PullResult> results = new ArrayList<>();
+                    PackPullRunner.run(force, results::add);
+                    // A forced pull merges every drink, so there is no unchanged one to ack.
+                    assertEquals(force ? 0 : 1, results.get(0).ackNow);
+                    assertEquals(1, results.get(0).queuedIa);
+                    verify(f.queue).enqueue(List.of("textured"));
+                    f.api.verify(() -> ProvinceSystemClient.markApplied(List.of("steady")), times(force ? 0 : 1));
+                    f.api.verify(() -> ProvinceSystemClient.markApplied(any()), times(force ? 0 : 1));
+
+                    broken.set(false);
+                    PackPullRunner.run(false, results::add);
+                    assertTrue(results.get(1).summary.startsWith("written=3 brewery=" + (force ? 3 : 2) + " "));
+                    f.bukkit.verify(() -> Bukkit.dispatchCommand(null, "brew reload"), times(2));
+                    f.api.verify(() -> ProvinceSystemClient.markApplied(List.of("fresh", "steady")));
+                }
+            }
         }
     }
 
