@@ -52,7 +52,9 @@ public final class PackPullScheduler {
 			log.info("[pack] passive poll disabled (pack-apply.poll-interval-seconds=0)");
 		}
 
-		dailyTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickDaily, 20L * 30, 20L * 60);
+		// Offset from the poll's first run so a poll interval that divides 60 s cannot land on every
+		// daily check and keep the forced pull from starting ("pull already running").
+		dailyTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickDaily, 20L * 30 + 10, 20L * 60);
 		String configured = Cache.forceReloadTime;
 		if (configured == null || configured.isBlank()) {
 			log.info("[pack] force-reload-time disabled");

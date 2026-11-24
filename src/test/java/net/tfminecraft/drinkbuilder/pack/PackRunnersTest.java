@@ -271,7 +271,7 @@ class PackRunnersTest {
             pull.when(() -> PackPullRunner.applyDrink(f.plugin, drink, f.allocator, f.log)).thenReturn(true);
             f.bukkit.when(() -> Bukkit.dispatchCommand(any(), anyString())).thenReturn(false);
             PackReapplyRunner.run(" x ", result::set);
-            assertEquals("Reapplied x (IA refresh queued)", result.get().message);
+            assertEquals("Reapplied x (IA refresh queued); brew reload failed, see the console", result.get().message);
             f.recipes.verify(() -> RecipesYmlMerger.forget("x"));
             f.bukkit.when(() -> Bukkit.dispatchCommand(any(), anyString())).thenThrow(new CommandException("boom"));
             PackReapplyRunner.run("x", result::set);

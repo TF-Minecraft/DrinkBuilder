@@ -104,6 +104,7 @@ public final class PackReapplyRunner {
 						ReapplyResult.success(
 							"Reapplied " + sid
 								+ (wroteIa ? " (IA refresh queued)" : " (brewery only)")
+								+ (brewOk ? "" : "; brew reload failed, see the console")
 						)
 					);
 				} catch (Exception e) {
