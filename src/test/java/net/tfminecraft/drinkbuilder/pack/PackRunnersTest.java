@@ -15,6 +15,7 @@ import net.tfminecraft.drinkbuilder.DrinkBuilder;
 import net.tfminecraft.drinkbuilder.api.ProvinceSystemClient;
 import net.tfminecraft.drinkbuilder.api.ProvinceSystemClient.*;
 import org.bukkit.Bukkit;
+import org.bukkit.command.CommandException;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.junit.jupiter.api.Test;
@@ -167,8 +168,11 @@ class PackRunnersTest {
             f.recipes.when(() -> RecipesYmlMerger.mergeIfChanged(f.plugin, plain, null, f.log)).thenReturn(true);
             f.bukkit.when(() -> Bukkit.dispatchCommand(any(), anyString())).thenReturn(false);
             assertTrue(PackPullRunner.run(false, null));
-            verify(f.log).warning("[pack] failed to dispatch brew reload");
-            f.recipes.verify(() -> RecipesYmlMerger.forget("plain"));
+            f.bukkit.when(() -> Bukkit.dispatchCommand(any(), anyString())).thenThrow(new CommandException("boom"));
+            assertTrue(PackPullRunner.run(false, null));
+            verify(f.log).warning("[pack] brew reload threw: boom");
+            verify(f.log, times(2)).warning("[pack] failed to dispatch brew reload");
+            f.recipes.verify(() -> RecipesYmlMerger.forget("plain"), times(2));
         }
     }
 
@@ -268,8 +272,14 @@ class PackRunnersTest {
             f.bukkit.when(() -> Bukkit.dispatchCommand(any(), anyString())).thenReturn(false);
             PackReapplyRunner.run(" x ", result::set);
             assertEquals("Reapplied x (IA refresh queued)", result.get().message);
-            verify(f.queue).enqueue(List.of("x"));
-            verify(f.reload).requestFlush(true);
+            f.recipes.verify(() -> RecipesYmlMerger.forget("x"));
+            f.bukkit.when(() -> Bukkit.dispatchCommand(any(), anyString())).thenThrow(new CommandException("boom"));
+            PackReapplyRunner.run("x", result::set);
+            assertTrue(result.get().ok);
+            verify(f.log).warning("[pack] reapply: brew reload threw: boom");
+            f.recipes.verify(() -> RecipesYmlMerger.forget("x"), times(2));
+            verify(f.queue, times(2)).enqueue(List.of("x"));
+            verify(f.reload, times(2)).requestFlush(true);
             when(f.plugin.getDeferredIaReload()).thenReturn(null);
             PackReapplyRunner.run("x", result::set);
             assertTrue(result.get().ok);

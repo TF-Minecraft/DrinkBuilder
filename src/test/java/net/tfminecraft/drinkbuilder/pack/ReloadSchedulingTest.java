@@ -115,7 +115,7 @@ class ReloadSchedulingTest {
         }
     }
 
-    @Test void dailyPullRequiresMatchingMinuteAndRunsOnlyOncePerDate() {
+    @Test void dailyPullRunsOnceInsideItsWindowAndRetriesWhenAPullIsRunning() {
         try (Fixture f = new Fixture(); MockedStatic<PackPullRunner> pull = mockStatic(PackPullRunner.class)) {
             Cache.packPollIntervalSeconds = 0;
             Cache.forceReloadTime = null;
@@ -131,15 +131,24 @@ class ReloadSchedulingTest {
                  MockedStatic<LocalTime> times = mockStatic(LocalTime.class, CALLS_REAL_METHODS)) {
                 dates.when(LocalDate::now).thenReturn(today);
                 times.when(LocalTime::now).thenReturn(now);
-                Cache.forceReloadTime = "11:34"; tick.run();
-                Cache.forceReloadTime = "12:33"; tick.run();
+                // Before the window, and the first tick after its 30 minutes (e.g. a 14:00 boot).
+                Cache.forceReloadTime = "12:35"; tick.run();
+                Cache.forceReloadTime = "12:04"; tick.run();
                 pull.verifyNoInteractions();
-                Cache.forceReloadTime = "12:34";
-                tick.run(); tick.run();
-                pull.verify(() -> PackPullRunner.run(true, null), times(1));
+                // A poll on the same tick holds the lock: the skipped attempt retries next tick.
+                pull.when(() -> PackPullRunner.run(true, null)).thenReturn(false, true);
+                Cache.forceReloadTime = "12:05";
+                tick.run(); tick.run(); tick.run();
+                pull.verify(() -> PackPullRunner.run(true, null), times(2));
                 dates.when(LocalDate::now).thenReturn(today.plusDays(1));
                 tick.run();
-                pull.verify(() -> PackPullRunner.run(true, null), times(2));
+                pull.verify(() -> PackPullRunner.run(true, null), times(3));
+                // A window that starts before midnight belongs to the previous date.
+                LocalTime afterMidnight = LocalTime.of(0, 10);
+                times.when(LocalTime::now).thenReturn(afterMidnight);
+                Cache.forceReloadTime = "23:50";
+                tick.run(); tick.run();
+                pull.verify(() -> PackPullRunner.run(true, null), times(4));
             }
         }
     }

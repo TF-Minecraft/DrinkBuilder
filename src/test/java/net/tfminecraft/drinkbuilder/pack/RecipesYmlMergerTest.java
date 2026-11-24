@@ -349,6 +349,8 @@ class RecipesYmlMergerTest {
 		assertFalse(RecipesYmlMerger.mergeIfChanged(null, drink("gate", "Name", edited), 20002, null));
 		RecipesYmlMerger.forget("gate");
 		assertTrue(RecipesYmlMerger.mergeIfChanged(null, drink("gate", "Name", edited), 20002, null));
+		RecipesYmlMerger.forgetAll();
+		assertTrue(RecipesYmlMerger.mergeIfChanged(null, drink("gate", "Name", edited), 20002, null));
 	}
 
 	@Test

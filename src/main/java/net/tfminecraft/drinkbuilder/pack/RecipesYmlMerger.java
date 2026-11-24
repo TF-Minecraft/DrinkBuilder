@@ -82,6 +82,11 @@ public final class RecipesYmlMerger {
 		MERGED.remove(submissionId);
 	}
 
+	/** Drop every fingerprint (config reload) so each pending drink is merged once more. */
+	public static synchronized void forgetAll() {
+		MERGED.clear();
+	}
+
 	public static synchronized void merge(
 		JavaPlugin plugin,
 		PendingDrink drink,

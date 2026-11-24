@@ -193,10 +193,13 @@ public final class PackPullRunner {
 		Bukkit.getScheduler().runTask(plugin, () -> {
 			try {
 				if (!breweryMerged.isEmpty()) {
-					boolean brewOk = Bukkit.dispatchCommand(
-						Bukkit.getConsoleSender(),
-						"brew reload"
-					);
+					boolean brewOk;
+					try {
+						brewOk = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "brew reload");
+					} catch (RuntimeException e) {
+						plugin.getLogger().warning("[pack] brew reload threw: " + e.getMessage());
+						brewOk = false;
+					}
 					if (!brewOk) {
 						plugin.getLogger().warning("[pack] failed to dispatch brew reload");
 						// Merge these again next poll so BreweryX still picks them up.
