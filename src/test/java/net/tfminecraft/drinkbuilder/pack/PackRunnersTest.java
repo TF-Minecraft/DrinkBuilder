@@ -134,6 +134,41 @@ class PackRunnersTest {
             assertEquals(1, result.get().queuedIa);
             f.api.verify(() -> ProvinceSystemClient.markApplied(any()), never());
             verify(f.queue).enqueue(List.of("brew"));
+            // Its recipe was merged on the earlier poll, so BreweryX is not reloaded again.
+            f.bukkit.verify(() -> Bukkit.dispatchCommand(any(), anyString()), never());
+        }
+    }
+
+    @Test void passivePullReloadsBreweryOnlyForChangedRecipesAndForcedPullAlwaysMerges() {
+        try (Fixture f = new Fixture()) {
+            PendingDrink plain = drink(" plain ", "approved", null, null);
+            f.api.when(ProvinceSystemClient::listPendingApply).thenReturn(ListResult.success(List.of(plain)));
+            f.api.when(() -> ProvinceSystemClient.markApplied(List.of("plain"))).thenReturn(AppliedResult.success(List.of("plain")));
+            f.recipes.when(() -> RecipesYmlMerger.mergeIfChanged(f.plugin, plain, null, f.log)).thenReturn(true, false);
+            List<PackPullRunner.PullResult> results = new ArrayList<>();
+            assertTrue(PackPullRunner.run(false, results::add));
+            assertTrue(PackPullRunner.run(false, results::add));
+            f.bukkit.verify(() -> Bukkit.dispatchCommand(null, "brew reload"), times(1));
+            assertTrue(results.get(0).summary.startsWith("written=1 brewery=1 "));
+            assertTrue(results.get(1).summary.startsWith("written=1 brewery=0 "));
+            assertEquals(1, results.get(1).ackNow);
+            assertTrue(PackPullRunner.run(true, results::add));
+            f.recipes.verify(() -> RecipesYmlMerger.merge(f.plugin, plain, null, f.log));
+            f.bukkit.verify(() -> Bukkit.dispatchCommand(null, "brew reload"), times(2));
+            f.recipes.verify(() -> RecipesYmlMerger.forget(anyString()), never());
+        }
+    }
+
+    @Test void failedBreweryReloadForgetsMergedRecipesSoTheNextPollRetries() {
+        try (Fixture f = new Fixture()) {
+            PendingDrink plain = drink(" plain ", "approved", null, null);
+            f.api.when(ProvinceSystemClient::listPendingApply).thenReturn(ListResult.success(List.of(plain)));
+            f.api.when(() -> ProvinceSystemClient.markApplied(any())).thenReturn(AppliedResult.success(List.of("plain")));
+            f.recipes.when(() -> RecipesYmlMerger.mergeIfChanged(f.plugin, plain, null, f.log)).thenReturn(true);
+            f.bukkit.when(() -> Bukkit.dispatchCommand(any(), anyString())).thenReturn(false);
+            assertTrue(PackPullRunner.run(false, null));
+            verify(f.log).warning("[pack] failed to dispatch brew reload");
+            f.recipes.verify(() -> RecipesYmlMerger.forget("plain"));
         }
     }
 

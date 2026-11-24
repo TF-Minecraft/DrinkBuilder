@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -49,7 +50,37 @@ public final class RecipesYmlMerger {
 	/** Bare #RRGGBB, which the website lore preview accepts but BreweryX prints as text. */
 	private static final Pattern BARE_HEX = Pattern.compile("(?<!&)#([0-9A-Fa-f]{6})");
 
+	/**
+	 * Recipe section text last merged this session, by drink key. The passive pull
+	 * skips drinks whose built section is unchanged, so a drink waiting for its
+	 * ItemsAdder zip does not rewrite recipes.yml and reload BreweryX every poll.
+	 */
+	private static final Map<String, String> MERGED = new HashMap<>();
+
 	private RecipesYmlMerger() {}
+
+	/**
+	 * Merge only when the recipe built from this drink differs from the one this
+	 * session last merged for its key. Returns whether recipes.yml was written.
+	 */
+	public static synchronized boolean mergeIfChanged(
+		JavaPlugin plugin,
+		PendingDrink drink,
+		Integer customModelData,
+		Logger log
+	) throws IOException {
+		String key = requireKey(drink);
+		if (buildRecipe(drink, key, customModelData).saveToString().equals(MERGED.get(key))) {
+			return false;
+		}
+		merge(plugin, drink, customModelData, log);
+		return true;
+	}
+
+	/** Drop the session fingerprint so the next pull merges this drink again. */
+	public static synchronized void forget(String submissionId) {
+		MERGED.remove(submissionId);
+	}
 
 	public static synchronized void merge(
 		JavaPlugin plugin,
@@ -57,10 +88,7 @@ public final class RecipesYmlMerger {
 		Integer customModelData,
 		Logger log
 	) throws IOException {
-		if (drink == null || drink.id == null || drink.id.isBlank()) {
-			throw new IOException("drink id required");
-		}
-		String key = drink.id.trim();
+		String key = requireKey(drink);
 		File recipesFile = new File(
 			resolvePath(plugin, Cache.breweryxFolder),
 			"recipes.yml"
@@ -77,9 +105,50 @@ public final class RecipesYmlMerger {
 		if (recipes == null) {
 			recipes = yaml.createSection("recipes");
 		}
+		YamlConfiguration built = buildRecipe(drink, key, customModelData);
+		recipes.createSection(key, built.getValues(false));
 
+		File tmp = new File(recipesFile.getParentFile(), "recipes.yml.tmp");
+		yaml.save(tmp);
+		try {
+			Files.move(
+				tmp.toPath(),
+				recipesFile.toPath(),
+				StandardCopyOption.REPLACE_EXISTING,
+				StandardCopyOption.ATOMIC_MOVE
+			);
+		} catch (IOException atomicFail) {
+			Files.move(
+				tmp.toPath(),
+				recipesFile.toPath(),
+				StandardCopyOption.REPLACE_EXISTING
+			);
+		}
+		MERGED.put(key, built.saveToString());
+
+		if (log != null) {
+			log.info("[brewery] merged recipe key=" + key
+				+ (customModelData != null
+					? (" cmd=" + customModelData)
+					: (" color=" + built.get("color"))));
+		}
+	}
+
+	private static String requireKey(PendingDrink drink) throws IOException {
+		if (drink == null || drink.id == null || drink.id.isBlank()) {
+			throw new IOException("drink id required");
+		}
+		return drink.id.trim();
+	}
+
+	/** Every field DrinkBuilder writes into the drink's BreweryX recipe section. */
+	private static YamlConfiguration buildRecipe(
+		PendingDrink drink,
+		String key,
+		Integer customModelData
+	) throws IOException {
 		Map<String, Object> recipe = drink.recipe;
-		ConfigurationSection section = recipes.createSection(key);
+		YamlConfiguration section = new YamlConfiguration();
 
 		String display = drink.displayName == null ? key : drink.displayName.trim();
 		String names = bakeQualityNames(recipe, display);
@@ -144,30 +213,7 @@ public final class RecipesYmlMerger {
 			}
 			section.set("color", color);
 		}
-
-		File tmp = new File(recipesFile.getParentFile(), "recipes.yml.tmp");
-		yaml.save(tmp);
-		try {
-			Files.move(
-				tmp.toPath(),
-				recipesFile.toPath(),
-				StandardCopyOption.REPLACE_EXISTING,
-				StandardCopyOption.ATOMIC_MOVE
-			);
-		} catch (IOException atomicFail) {
-			Files.move(
-				tmp.toPath(),
-				recipesFile.toPath(),
-				StandardCopyOption.REPLACE_EXISTING
-			);
-		}
-
-		if (log != null) {
-			log.info("[brewery] merged recipe key=" + key
-				+ (customModelData != null
-					? (" cmd=" + customModelData)
-					: (" color=" + section.get("color"))));
-		}
+		return section;
 	}
 
 	public static synchronized boolean remove(JavaPlugin plugin, String submissionId, Logger log)
@@ -176,6 +222,7 @@ public final class RecipesYmlMerger {
 		if (key.isEmpty()) {
 			throw new IOException("drink id required");
 		}
+		MERGED.remove(key);
 		File recipesFile = new File(
 			resolvePath(plugin, Cache.breweryxFolder),
 			"recipes.yml"

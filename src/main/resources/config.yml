@@ -15,7 +15,9 @@ ia-reload-delay-seconds: 8
 pack-apply:
   # Poll every N seconds; 0 = disable periodic pull (empty-server pull still runs).
   poll-interval-seconds: 120
-  # Daily force pull + IA refresh at local HH:mm; empty = disable.
-  force-reload-time: "06:00"
+  # Daily force pull + IA refresh at HH:mm in the server's local time zone
+  # (JVM default; TFMC hosts run UTC). Reloads ItemsAdder with players online
+  # when a texture drink or texture removal is waiting. Empty = disable.
+  force-reload-time: "09:30"
 
 # Rank entitlements (name colour stops + texture) live in permission-groups.yml.

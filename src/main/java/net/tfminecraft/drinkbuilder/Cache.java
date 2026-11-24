@@ -34,8 +34,8 @@ public final class Cache {
 	/** Passive pull interval; 0 disables periodic poll. */
 	public static int packPollIntervalSeconds = 120;
 
-	/** Daily HH:mm force pull; empty disables. */
-	public static String forceReloadTime = "06:00";
+	/** Daily HH:mm force pull in the server's local time zone; empty disables. */
+	public static String forceReloadTime = "09:30";
 
 	private Cache() {}
 

@@ -88,6 +88,7 @@ public final class PackPullRunner {
 			int failed = 0;
 			List<String> ackImmediate = new ArrayList<>();
 			List<String> needIa = new ArrayList<>();
+			List<String> breweryMerged = new ArrayList<>();
 			List<String> messages = new ArrayList<>();
 
 			try {
@@ -95,12 +96,12 @@ public final class PackPullRunner {
 				if (!list.ok) {
 					messages.add("list failed: " + list.error);
 					log.warning("[pack] " + messages.get(0));
-					finish(plugin, forceReload, 0, 0, List.of(), List.of(), messages, onDone);
+					finish(plugin, forceReload, 0, 0, List.of(), List.of(), List.of(), messages, onDone);
 					return;
 				}
 				if (list.submissions.isEmpty()) {
 					messages.add("no pending drinks");
-					finish(plugin, forceReload, 0, 0, List.of(), List.of(), messages, onDone);
+					finish(plugin, forceReload, 0, 0, List.of(), List.of(), List.of(), messages, onDone);
 					return;
 				}
 
@@ -109,11 +110,15 @@ public final class PackPullRunner {
 				List<String> awaitingZip = reload == null ? List.of() : reload.queue().snapshot();
 				for (PendingDrink drink : list.submissions) {
 					try {
-						boolean wroteIa = applyDrink(plugin, drink, allocator, log);
+						// A forced pull always rewrites the recipe; a passive one only when it changed.
+						Applied applied = applyDrink(plugin, drink, allocator, log, forceReload);
 						written++;
+						if (applied.breweryMerged()) {
+							breweryMerged.add(drink.id.trim());
+						}
 						// A texture written on an earlier poll already has its CMD, so it no longer
 						// needs an IA write, but it is not live until the queued iazip completes.
-						if (wroteIa || awaitingZip.contains(drink.id.trim())) {
+						if (applied.wroteIa() || awaitingZip.contains(drink.id.trim())) {
 							needIa.add(drink.id.trim());
 						} else {
 							ackImmediate.add(drink.id.trim());
@@ -131,16 +136,29 @@ public final class PackPullRunner {
 				log.warning("[pack] pull failed: " + e.getMessage());
 			}
 
-			finish(plugin, forceReload, written, failed, ackImmediate, needIa, messages, onDone);
+			finish(plugin, forceReload, written, failed, ackImmediate, needIa, breweryMerged, messages, onDone);
 		});
 		return true;
 	}
 
+	record Applied(boolean wroteIa, boolean breweryMerged) {}
+
+	/** Forced apply (pack reapply): always rewrites the BreweryX recipe. */
 	static boolean applyDrink(
 		JavaPlugin plugin,
 		PendingDrink drink,
 		CmdAllocator allocator,
 		Logger log
+	) throws Exception {
+		return applyDrink(plugin, drink, allocator, log, true).wroteIa();
+	}
+
+	static Applied applyDrink(
+		JavaPlugin plugin,
+		PendingDrink drink,
+		CmdAllocator allocator,
+		Logger log,
+		boolean forceMerge
 	) throws Exception {
 		RecipesYmlMerger.validateIngredients(drink.recipe, drink.id);
 		Integer cmd = drink.existingCmd();
@@ -152,8 +170,13 @@ public final class PackPullRunner {
 			cmd = wr.cmd;
 			wroteIa = true;
 		}
-		RecipesYmlMerger.merge(plugin, drink, cmd, log);
-		return wroteIa;
+		boolean merged = true;
+		if (forceMerge) {
+			RecipesYmlMerger.merge(plugin, drink, cmd, log);
+		} else {
+			merged = RecipesYmlMerger.mergeIfChanged(plugin, drink, cmd, log);
+		}
+		return new Applied(wroteIa, merged);
 	}
 
 	private static void finish(
@@ -163,18 +186,21 @@ public final class PackPullRunner {
 		int failed,
 		List<String> ackImmediate,
 		List<String> needIa,
+		List<String> breweryMerged,
 		List<String> messages,
 		Consumer<PullResult> onDone
 	) {
 		Bukkit.getScheduler().runTask(plugin, () -> {
 			try {
-				if (written > 0) {
+				if (!breweryMerged.isEmpty()) {
 					boolean brewOk = Bukkit.dispatchCommand(
 						Bukkit.getConsoleSender(),
 						"brew reload"
 					);
 					if (!brewOk) {
 						plugin.getLogger().warning("[pack] failed to dispatch brew reload");
+						// Merge these again next poll so BreweryX still picks them up.
+						breweryMerged.forEach(RecipesYmlMerger::forget);
 					} else {
 						plugin.getLogger().info("[pack] brew reload dispatched");
 					}
@@ -219,6 +245,7 @@ public final class PackPullRunner {
 				}
 
 				String summary = "written=" + written
+					+ " brewery=" + breweryMerged.size()
 					+ " failed=" + failed
 					+ " ackNow=" + ackImmediate.size()
 					+ " queuedIa=" + needIa.size();

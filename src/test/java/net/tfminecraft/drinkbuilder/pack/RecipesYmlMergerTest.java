@@ -324,6 +324,34 @@ class RecipesYmlMergerTest {
 	}
 
 	@Test
+	void passiveMergeWritesOnlyNewOrChangedRecipesUntilForcedOrRemoved() throws IOException {
+		// Unique key: the session fingerprints are static and outlive each test's directory.
+		PendingDrink drink = drink("gate", "Name", baseRecipe());
+		assertTrue(RecipesYmlMerger.mergeIfChanged(null, drink, 20001, null));
+		assertEquals(20001, load().getInt("recipes.gate.customModelData"));
+		// BreweryX reformats recipes.yml on reload; the gate must not read it back.
+		String reformatted = "recipes:\n  gate:\n    name: reformatted\n";
+		Files.writeString(recipeFile(), reformatted);
+		assertFalse(RecipesYmlMerger.mergeIfChanged(null, drink("gate", "Name", baseRecipe()), 20001, null));
+		assertEquals(reformatted, Files.readString(recipeFile()));
+
+		assertTrue(RecipesYmlMerger.mergeIfChanged(null, drink, 20002, null));
+		Map<String, Object> edited = baseRecipe();
+		edited.put("lore", List.of("Edited on the website"));
+		assertTrue(RecipesYmlMerger.mergeIfChanged(null, drink("gate", "Name", edited), 20002, null));
+		assertFalse(RecipesYmlMerger.mergeIfChanged(null, drink("gate", "Name", edited), 20002, null));
+
+		assertTrue(RecipesYmlMerger.remove(null, "gate", null));
+		assertTrue(RecipesYmlMerger.mergeIfChanged(null, drink("gate", "Name", edited), 20002, null));
+		Files.writeString(recipeFile(), reformatted);
+		RecipesYmlMerger.merge(null, drink("gate", "Name", edited), 20002, null);
+		assertEquals(List.of("Edited on the website"), load().getStringList("recipes.gate.lore"));
+		assertFalse(RecipesYmlMerger.mergeIfChanged(null, drink("gate", "Name", edited), 20002, null));
+		RecipesYmlMerger.forget("gate");
+		assertTrue(RecipesYmlMerger.mergeIfChanged(null, drink("gate", "Name", edited), 20002, null));
+	}
+
+	@Test
 	void fallsBackToNonAtomicReplacementWhenFileSystemDoesNotSupportIt() throws IOException {
 		try (MockedStatic<Files> mocked = mockStatic(Files.class, invocation -> {
 			if (invocation.getMethod().getName().equals("move")

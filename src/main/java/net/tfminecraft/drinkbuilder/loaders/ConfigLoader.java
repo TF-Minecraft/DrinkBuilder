@@ -46,7 +46,7 @@ public final class ConfigLoader {
 			Cache.packPollIntervalSeconds = 0;
 		}
 
-		String forceTime = config.getString("pack-apply.force-reload-time", "06:00");
+		String forceTime = config.getString("pack-apply.force-reload-time", "09:30");
 		Cache.forceReloadTime = forceTime == null ? "" : forceTime.trim();
 	}
 }
