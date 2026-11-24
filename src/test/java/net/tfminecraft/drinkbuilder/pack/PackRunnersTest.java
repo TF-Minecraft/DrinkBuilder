@@ -6,8 +6,11 @@ import static org.mockito.Mockito.*;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 import net.tfminecraft.drinkbuilder.Cache;
@@ -15,6 +18,7 @@ import net.tfminecraft.drinkbuilder.DrinkBuilder;
 import net.tfminecraft.drinkbuilder.api.ProvinceSystemClient;
 import net.tfminecraft.drinkbuilder.api.ProvinceSystemClient.*;
 import org.bukkit.Bukkit;
+import org.bukkit.command.CommandException;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitScheduler;
 import org.junit.jupiter.api.Test;
@@ -134,6 +138,86 @@ class PackRunnersTest {
             assertEquals(1, result.get().queuedIa);
             f.api.verify(() -> ProvinceSystemClient.markApplied(any()), never());
             verify(f.queue).enqueue(List.of("brew"));
+            // Its recipe was merged on the earlier poll, so BreweryX is not reloaded again.
+            f.bukkit.verify(() -> Bukkit.dispatchCommand(any(), anyString()), never());
+        }
+    }
+
+    @Test void passivePullReloadsBreweryOnlyForChangedRecipesAndForcedPullAlwaysMerges() {
+        try (Fixture f = new Fixture()) {
+            PendingDrink plain = drink(" plain ", "approved", null, null);
+            f.api.when(ProvinceSystemClient::listPendingApply).thenReturn(ListResult.success(List.of(plain)));
+            f.api.when(() -> ProvinceSystemClient.markApplied(List.of("plain"))).thenReturn(AppliedResult.success(List.of("plain")));
+            f.recipes.when(() -> RecipesYmlMerger.mergeIfChanged(f.plugin, plain, null, f.log)).thenReturn(true, false);
+            List<PackPullRunner.PullResult> results = new ArrayList<>();
+            assertTrue(PackPullRunner.run(false, results::add));
+            assertTrue(PackPullRunner.run(false, results::add));
+            f.bukkit.verify(() -> Bukkit.dispatchCommand(null, "brew reload"), times(1));
+            assertTrue(results.get(0).summary.startsWith("written=1 brewery=1 "));
+            assertTrue(results.get(1).summary.startsWith("written=1 brewery=0 "));
+            assertEquals(1, results.get(1).ackNow);
+            assertTrue(PackPullRunner.run(true, results::add));
+            f.recipes.verify(() -> RecipesYmlMerger.merge(f.plugin, plain, null, f.log));
+            f.bukkit.verify(() -> Bukkit.dispatchCommand(null, "brew reload"), times(2));
+            f.recipes.verify(() -> RecipesYmlMerger.forget(anyString()), never());
+        }
+    }
+
+    @Test void failedBreweryReloadForgetsMergedRecipesSoTheNextPollRetries() {
+        try (Fixture f = new Fixture()) {
+            PendingDrink plain = drink(" plain ", "approved", null, null);
+            f.api.when(ProvinceSystemClient::listPendingApply).thenReturn(ListResult.success(List.of(plain)));
+            f.api.when(() -> ProvinceSystemClient.markApplied(any())).thenReturn(AppliedResult.success(List.of("plain")));
+            f.recipes.when(() -> RecipesYmlMerger.mergeIfChanged(f.plugin, plain, null, f.log)).thenReturn(true);
+            f.bukkit.when(() -> Bukkit.dispatchCommand(any(), anyString())).thenReturn(false);
+            assertTrue(PackPullRunner.run(false, null));
+            f.bukkit.when(() -> Bukkit.dispatchCommand(any(), anyString())).thenThrow(new CommandException("boom"));
+            assertTrue(PackPullRunner.run(false, null));
+            verify(f.log).warning("[pack] brew reload threw: boom");
+            verify(f.log, times(2)).warning("[pack] failed to dispatch brew reload");
+            f.recipes.verify(() -> RecipesYmlMerger.forget("plain"), times(2));
+        }
+    }
+
+    @Test void failedBreweryReloadKeepsMergedDrinksPendingAndAcksOnlyUnchangedOnes() {
+        for (boolean force : new boolean[] {false, true}) {
+            for (boolean throwing : new boolean[] {false, true}) {
+                try (Fixture f = new Fixture()) {
+                    PendingDrink fresh = drink(" fresh ", "approved", null, null);
+                    PendingDrink steady = drink(" steady ", "approved", null, null);
+                    PendingDrink textured = drink(" textured ", "approved", null, "tex");
+                    f.writer.when(() -> IaDrinksWriter.write(f.plugin, textured, f.allocator, f.log))
+                        .thenReturn(new IaDrinksWriter.WriteResult(456, "drinks:textured"));
+                    f.api.when(ProvinceSystemClient::listPendingApply)
+                        .thenReturn(ListResult.success(List.of(fresh, steady, textured)));
+                    f.api.when(() -> ProvinceSystemClient.markApplied(any())).thenAnswer(inv -> AppliedResult.success(inv.getArgument(0)));
+                    // Stand-in for the session fingerprints: "steady" was merged and reloaded earlier.
+                    Set<String> merged = new HashSet<>(Set.of("steady"));
+                    f.recipes.when(() -> RecipesYmlMerger.mergeIfChanged(any(), any(), any(), any()))
+                        .thenAnswer(inv -> merged.add(inv.getArgument(1, PendingDrink.class).id.trim()));
+                    f.recipes.when(() -> RecipesYmlMerger.forget(anyString()))
+                        .thenAnswer(inv -> merged.remove(inv.getArgument(0, String.class)));
+                    AtomicBoolean broken = new AtomicBoolean(true);
+                    f.bukkit.when(() -> Bukkit.dispatchCommand(any(), anyString())).thenAnswer(inv -> {
+                        if (broken.get() && throwing) throw new CommandException("boom");
+                        return !broken.get();
+                    });
+                    List<PackPullRunner.PullResult> results = new ArrayList<>();
+                    PackPullRunner.run(force, results::add);
+                    // A forced pull merges every drink, so there is no unchanged one to ack.
+                    assertEquals(force ? 0 : 1, results.get(0).ackNow);
+                    assertEquals(1, results.get(0).queuedIa);
+                    verify(f.queue).enqueue(List.of("textured"));
+                    f.api.verify(() -> ProvinceSystemClient.markApplied(List.of("steady")), times(force ? 0 : 1));
+                    f.api.verify(() -> ProvinceSystemClient.markApplied(any()), times(force ? 0 : 1));
+
+                    broken.set(false);
+                    PackPullRunner.run(false, results::add);
+                    assertTrue(results.get(1).summary.startsWith("written=3 brewery=" + (force ? 3 : 2) + " "));
+                    f.bukkit.verify(() -> Bukkit.dispatchCommand(null, "brew reload"), times(2));
+                    f.api.verify(() -> ProvinceSystemClient.markApplied(List.of("fresh", "steady")));
+                }
+            }
         }
     }
 
@@ -232,9 +316,15 @@ class PackRunnersTest {
             pull.when(() -> PackPullRunner.applyDrink(f.plugin, drink, f.allocator, f.log)).thenReturn(true);
             f.bukkit.when(() -> Bukkit.dispatchCommand(any(), anyString())).thenReturn(false);
             PackReapplyRunner.run(" x ", result::set);
-            assertEquals("Reapplied x (IA refresh queued)", result.get().message);
-            verify(f.queue).enqueue(List.of("x"));
-            verify(f.reload).requestFlush(true);
+            assertEquals("Reapplied x (IA refresh queued); brew reload failed, see the console", result.get().message);
+            f.recipes.verify(() -> RecipesYmlMerger.forget("x"));
+            f.bukkit.when(() -> Bukkit.dispatchCommand(any(), anyString())).thenThrow(new CommandException("boom"));
+            PackReapplyRunner.run("x", result::set);
+            assertTrue(result.get().ok);
+            verify(f.log).warning("[pack] reapply: brew reload threw: boom");
+            f.recipes.verify(() -> RecipesYmlMerger.forget("x"), times(2));
+            verify(f.queue, times(2)).enqueue(List.of("x"));
+            verify(f.reload, times(2)).requestFlush(true);
             when(f.plugin.getDeferredIaReload()).thenReturn(null);
             PackReapplyRunner.run("x", result::set);
             assertTrue(result.get().ok);

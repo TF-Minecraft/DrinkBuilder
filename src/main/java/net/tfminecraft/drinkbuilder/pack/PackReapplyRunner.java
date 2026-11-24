@@ -79,12 +79,17 @@ public final class PackReapplyRunner {
 						plugin.getCmdAllocator(),
 						log
 					);
-					boolean brewOk = Bukkit.dispatchCommand(
-						Bukkit.getConsoleSender(),
-						"brew reload"
-					);
+					boolean brewOk;
+					try {
+						brewOk = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "brew reload");
+					} catch (RuntimeException e) {
+						log.warning("[pack] reapply: brew reload threw: " + e.getMessage());
+						brewOk = false;
+					}
 					if (!brewOk) {
 						log.warning("[pack] reapply: brew reload dispatch failed for " + sid);
+						// The next passive pull merges and reloads it again.
+						RecipesYmlMerger.forget(drink.id.trim());
 					}
 					if (wroteIa) {
 						DeferredDrinkIaReload reload = plugin.getDeferredIaReload();
@@ -99,6 +104,7 @@ public final class PackReapplyRunner {
 						ReapplyResult.success(
 							"Reapplied " + sid
 								+ (wroteIa ? " (IA refresh queued)" : " (brewery only)")
+								+ (brewOk ? "" : "; brew reload failed, see the console")
 						)
 					);
 				} catch (Exception e) {

@@ -22,6 +22,7 @@ import net.tfminecraft.drinkbuilder.pack.IaDrinksScaffold;
 import net.tfminecraft.drinkbuilder.pack.ItemsAdderPackListener;
 import net.tfminecraft.drinkbuilder.pack.PackPullScheduler;
 import net.tfminecraft.drinkbuilder.pack.PendingReloadQueue;
+import net.tfminecraft.drinkbuilder.pack.RecipesYmlMerger;
 
 public class DrinkBuilder extends JavaPlugin {
 
@@ -113,6 +114,8 @@ public class DrinkBuilder extends JavaPlugin {
 		if (cmdAllocator != null) {
 			cmdAllocator.reloadBounds();
 		}
+		// Paths or ingredient tokens may have changed: re-merge every pending drink once.
+		RecipesYmlMerger.forgetAll();
 		if (packPullScheduler != null) {
 			packPullScheduler.start();
 		}

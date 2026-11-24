@@ -20,6 +20,8 @@ public final class PackPullScheduler {
 	private static final DateTimeFormatter HH_MM = DateTimeFormatter.ofPattern("HH:mm");
 	private static final long MIN_POLL_SECONDS = 30;
 	private static final long MAX_POLL_SECONDS = 600;
+	/** The forced pull may start up to this long after force-reload-time. */
+	private static final int FORCE_WINDOW_SECONDS = 30 * 60;
 
 	private final JavaPlugin plugin;
 	private BukkitTask pollTask;
@@ -50,7 +52,9 @@ public final class PackPullScheduler {
 			log.info("[pack] passive poll disabled (pack-apply.poll-interval-seconds=0)");
 		}
 
-		dailyTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickDaily, 20L * 30, 20L * 60);
+		// Offset from the poll's first run so a poll interval that divides 60 s cannot land on every
+		// daily check and keep the forced pull from starting ("pull already running").
+		dailyTask = Bukkit.getScheduler().runTaskTimer(plugin, this::tickDaily, 20L * 30 + 10, 20L * 60);
 		String configured = Cache.forceReloadTime;
 		if (configured == null || configured.isBlank()) {
 			log.info("[pack] force-reload-time disabled");
@@ -87,15 +91,21 @@ public final class PackPullScheduler {
 
 		LocalDate today = LocalDate.now();
 		LocalTime now = LocalTime.now();
-		if (lastForcedDate != null && lastForcedDate.equals(today)) {
+		// Due inside [target, target + 30 min). A window can start before midnight.
+		int intoWindow = Math.floorMod(now.toSecondOfDay() - target.toSecondOfDay(), 24 * 60 * 60);
+		if (intoWindow >= FORCE_WINDOW_SECONDS) {
 			return;
 		}
-		if (now.getHour() != target.getHour() || now.getMinute() != target.getMinute()) {
+		LocalDate windowDate = now.isBefore(target) ? today.minusDays(1) : today;
+		if (windowDate.equals(lastForcedDate)) {
 			return;
 		}
 
-		lastForcedDate = today;
-		plugin.getLogger().info("[pack] force-reload-time matched — running pull (force=true)");
-		PackPullRunner.run(true, null);
+		plugin.getLogger().info("[pack] force-reload-time due — running pull (force=true)");
+		// A pull already running (e.g. the passive poll on the same tick) skips this one;
+		// the next daily tick inside the window tries again.
+		if (PackPullRunner.run(true, null)) {
+			lastForcedDate = windowDate;
+		}
 	}
 }

@@ -51,7 +51,12 @@ class ConfigurationTest {
         assertEquals(29999, Cache.cmdMax);
         assertEquals(8, Cache.iaReloadDelaySeconds);
         assertEquals(120, Cache.packPollIntervalSeconds);
-        assertEquals("06:00", Cache.forceReloadTime);
+        assertEquals("09:30", Cache.forceReloadTime);
+        // Main stops at 06:00 for its daily restart, so the bundled default must match too.
+        try (var stream = getClass().getResourceAsStream("/config.yml")) {
+            loader.load(yaml(new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)));
+        }
+        assertEquals("09:30", Cache.forceReloadTime);
         loader.load(yaml("""
             paths:
               breweryx-folder: ' brewery '
